@@ -1,0 +1,35 @@
+# dataset
+datasets/
+dataset/
+real_datasets/
+real_data/
+raw_data/
+real_test/
+
+*.zip
+*.7z
+*.tar
+
+# checkpoints
+checkpoints/
+*.pth
+*.pt
+
+# logs
+logs/
+*.csv
+
+# outputs
+outputs/
+results/
+
+# cache
+__pycache__/
+*.pyc
+
+# IDE
+.idea/
+.vscode/
+
+# temp
+*.tmp
