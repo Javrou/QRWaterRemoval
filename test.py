@@ -31,7 +31,7 @@ def main():
     # ======================
     # Load checkpoint
     # ======================
-    ckpt_path = "checkpoints/best-v1.pth"
+    ckpt_path = "checkpoints/best_v1.pth"
 
     epoch, step, best_loss = load_checkpoint(
         ckpt_path,
