@@ -1,11 +1,12 @@
 from torch.utils.data import DataLoader
 from tool.pretrain_dataset import QRDataset
+from pathlib import Path
 
-train_set = QRDataset("synthetic/train", train=True)
-val_set = QRDataset("synthetic/val", train=False)
-test_set = QRDataset("synthetic/test", train=False)
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-
+train_set = QRDataset(BASE_DIR / "synthetic/train", train=True)
+val_set = QRDataset(BASE_DIR / "synthetic/val", train=False)
+test_set = QRDataset(BASE_DIR / "synthetic/test", train=False)
 train_loader = DataLoader(
     train_set,
     batch_size=32,
