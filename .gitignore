@@ -1,9 +1,7 @@
 # dataset
-datasets/
-dataset/
-real_datasets/
-real_data/
-raw_data/
+*datasets/
+*dataset/
+*data/
 real_test/
 
 *.zip
