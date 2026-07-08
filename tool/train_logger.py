@@ -1,41 +1,79 @@
-"""
-日志
-"""
 import os
 import csv
 
 
-class CSVLogger:
-
+class StepLogger:
     def __init__(self, path):
-        self.path = path
-
         os.makedirs(os.path.dirname(path), exist_ok=True)
-
-        file_exists = os.path.exists(path)
-
-        with open(self.path, 'a', newline='') as f:
-            writer = csv.writer(f)
-
-            if not file_exists:
-                writer.writerow([
+        self.path = path
+        if not os.path.exists(path):
+            with open(path, "w", newline="") as f:
+                csv.writer(f).writerow([
                     "epoch",
                     "step",
                     "loss",
                     "lr",
-                    "zxing_rate",
-                    "grad_norm"
+                    "grad_norm",
+                    "zxing"
                 ])
 
-    def log(self, epoch, step, loss, lr, zxing_rate, grad_norm):
-        with open(self.path, 'a', newline='') as f:
-            writer = csv.writer(f)
-
-            writer.writerow([
+    def log(self, epoch, step, loss, lr, grad_norm=None, zxing=None):
+        with open(self.path, "a", newline="") as f:
+            csv.writer(f).writerow([
                 epoch,
                 step,
-                float(loss),
-                float(lr),
-                float(zxing_rate) if zxing_rate is not None else -1,
-                float(grad_norm)
+                loss,
+                lr,
+                grad_norm,
+                zxing
+            ])
+
+
+class EpochLogger:
+    def __init__(self, path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        self.path = path
+        if not os.path.exists(path):
+            with open(path, "w", newline="") as f:
+                csv.writer(f).writerow([
+                    "epoch",
+                    "train_loss",
+                    "val_loss",
+                    "lr",
+                    "zxing",
+                    "psnr",
+                    "ssim",
+                    "best_loss",
+                    "best_zxing",
+                    "best_psnr",
+                    "best_ssim"
+                ])
+
+    def log(
+        self,
+        epoch,
+        train_loss,
+        val_loss,
+        lr,
+        zxing,
+        psnr,
+        ssim,
+        best_loss,
+        best_zxing,
+        best_psnr,
+        best_ssim
+    ):
+        with open(self.path, "a", newline="") as f:
+            csv.writer(f).writerow([
+                epoch,
+                train_loss,
+                val_loss,
+                lr,
+                zxing,
+                psnr,
+                ssim,
+                best_loss,
+                best_zxing,
+                best_psnr,
+                best_ssim
             ])

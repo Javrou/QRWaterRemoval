@@ -6,7 +6,7 @@ from pathlib import Path
 from tool.degradation import degrade_qr
 
 
-class QRDataset(Dataset):
+class PretrainQRDataset(Dataset):
     def __init__(self, root, train=True):
         self.root = Path(root)
         self.train = train
