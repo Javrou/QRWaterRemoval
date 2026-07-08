@@ -5,7 +5,7 @@ import os
 import torch
 
 
-def save_checkpoint(path, model, optimizer, scheduler, epoch, step, best_loss):
+def save_checkpoint(path, model, optimizer, scheduler, epoch, step, best_zxing):
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
     torch.save({
@@ -14,7 +14,7 @@ def save_checkpoint(path, model, optimizer, scheduler, epoch, step, best_loss):
         "scheduler": scheduler.state_dict() if scheduler else None,
         "epoch": epoch,
         "step": step,
-        "best_loss": best_loss
+        "best_zxing": best_zxing
     }, path)
 
 
