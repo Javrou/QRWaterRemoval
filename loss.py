@@ -10,8 +10,33 @@ ssim_loss = SSIM(data_range=1.0, size_average=True, channel=3)
 # ======================
 # Binary Loss
 # ======================
-def binary_loss(pred):
-    return torch.mean(pred * (1 - pred))
+def binary_loss(pred, gt):
+    pred_gray = (
+            0.299 * pred[:, 0:1]
+            +
+            0.587 * pred[:, 1:2]
+            +
+            0.114 * pred[:, 2:3]
+    )
+
+    gt_gray = (
+            0.299 * gt[:, 0:1]
+            +
+            0.587 * gt[:, 1:2]
+            +
+            0.114 * gt[:, 2:3]
+    )
+
+    pred_binary = torch.sigmoid(
+        (pred_gray - 0.5) * 10
+    )
+
+    gt_binary = (gt_gray > 0.5).float()
+
+    return F.binary_cross_entropy(
+        pred_binary,
+        gt_binary
+    )
 
 
 # ======================
@@ -25,19 +50,45 @@ def rgb2gray(x):
 # Edge Loss
 # ======================
 def edge_loss(pred, gt):
-    kernel = torch.tensor([[1, 0, -1],
-                           [1, 0, -1],
-                           [1, 0, -1]],
-                          dtype=torch.float32,
-                          device=pred.device)
+    sobel_x = torch.tensor(
+        [[-1, 0, 1],
+         [-2, 0, 2],
+         [-1, 0, 1]],
+        dtype=torch.float32,
+        device=pred.device
+    ).view(1, 1, 3, 3)
+    sobel_y = torch.tensor(
+        [[-1, -2, -1],
+         [0, 0, 0],
+         [1, 2, 1]],
+        dtype=torch.float32,
+        device=pred.device
+    ).view(1, 1, 3, 3)
 
-    kernel = kernel.unsqueeze(0).unsqueeze(0)  # [1,1,3,3]
+    def edge(img):
+        gray = (
+                0.299 * img[:, 0:1]
+                +
+                0.587 * img[:, 1:2]
+                +
+                0.114 * img[:, 2:3]
+        )
 
-    def grad(x):
-        x = rgb2gray(x)
-        return F.conv2d(x, kernel, padding=1)
+        gx = F.conv2d(
+            gray,
+            sobel_x,
+            padding=1
+        )
 
-    return F.l1_loss(grad(pred), grad(gt))
+        gy = F.conv2d(
+            gray,
+            sobel_y,
+            padding=1
+        )
+
+        return torch.sqrt(gx ** 2 + gy ** 2 + 1e-6)
+
+    return F.l1_loss(edge(pred), edge(gt))
 
 
 # ======================
@@ -61,10 +112,10 @@ def compute_loss(pred, gt):
 
     loss = (
             1.0 * l1 +
-            0.15 * ssim +
-            0.15 * edge_loss(pred, gt) +
-            0.05 * binary_loss(pred) +
-            0.08 * zxing_proxy_loss(pred)
+            0.10 * ssim +
+            0.25 * edge_loss(pred, gt) +
+            0.10 * binary_loss(pred, gt) +
+            0.10 * zxing_proxy_loss(pred)
     )
 
     return loss

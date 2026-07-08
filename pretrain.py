@@ -1,4 +1,6 @@
 import time
+import random
+import numpy as np
 import torch.optim as optim
 from torch.amp import autocast, GradScaler
 
@@ -9,6 +11,13 @@ from tool.data_loader import *
 from loss import *
 from tool.train_logger import *
 from tool.checkpoints import save_checkpoint
+
+seed=42
+
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -30,11 +39,19 @@ model = Restormer(
 
 print(f"Parameters: {sum(p.numel() for p in model.parameters()) / 1e6:.2f} M")
 
+num_epochs = 20
+
 # optimizer with AMP
 optimizer = optim.AdamW(
     model.parameters(),
     lr=3e-4,
     weight_decay=1e-4
+)
+
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer,
+    T_max=num_epochs,
+    eta_min=1e-6
 )
 scaler = GradScaler("cuda")
 
@@ -58,14 +75,56 @@ def zxing_rate(batch_tensor):
 
 
 # ======================
+# Validation
+ # ======================
+def validate(model, loader):
+    model.eval()
+    total_success = 0
+    total_num = 0
+    total_loss = 0
+
+    with torch.no_grad():
+        for inp, tgt in loader:
+            inp = inp.to(device)
+            tgt = tgt.to(device)
+            pred = model(inp).clamp(0, 1)
+            loss = compute_loss(
+                pred,
+                tgt
+            )
+
+            total_loss += loss.item()
+            imgs = pred.cpu()
+            for i in range(imgs.shape[0]):
+                img = imgs[i]
+
+                img = img.permute(
+                    1, 2, 0
+                ).numpy()
+
+                img = (img * 255).astype(
+                    "uint8"
+                )
+                result = zxingcpp.read_barcodes(
+                    img
+                )
+                if len(result) > 0:
+                    total_success += 1
+                total_num += 1
+
+    return (
+        total_loss / len(loader),
+        total_success / total_num
+    )
+
+# ======================
 # Training
 # ======================
 logger = CSVLogger('logs/train_log.csv')
 
 best_loss = 1e9
+best_zxing = 0
 global_step = 0
-
-num_epochs = 5
 
 running_loss = 0.0
 for epoch in range(num_epochs):
@@ -101,7 +160,7 @@ for epoch in range(num_epochs):
         dt = time.time() - t0
 
         # log
-        if (i + 1) % 10 == 0:
+        if (i + 1) % 50 == 0:
             print(
                 f"[E{epoch} {i + 1}/{len(train_loader)}] "
                 f"loss={loss.item():.4f} "
@@ -118,8 +177,8 @@ for epoch in range(num_epochs):
                 grad_norm=total_norm
             )
 
-        # zxing eval (每 50 step)
-        if (i + 1) % 50 == 0:
+        # zxing eval
+        if (i + 1) % 200 == 0:
             with torch.no_grad():
                 pred_vis = pred.clamp(0, 1)
                 sr = zxing_rate(pred_vis)
@@ -143,33 +202,24 @@ for epoch in range(num_epochs):
     print("Epoch time:", time.time() - t_epoch)
     print("Avg Loss:", avg_loss)
 
-    # ======================
-    # Validation
-    # ======================
-    model.eval()
+    scheduler.step()
+    print("Current LR:", optimizer.param_groups[0]['lr'])
 
-    with torch.no_grad():
-        inp, tgt = next(iter(val_loader))
-        inp = inp.to(device)
-
-        pred = model(inp).clamp(0, 1)
-
-        sr = zxing_rate(pred)
-
-    print("Validation ZXing Rate:", sr)
-
+    val_loss, val_zxing = validate(model, val_loader)
+    print("Validation Loss:", val_loss)
+    print("Validation ZXing Rate:", val_zxing)
     # ======================
     # checkpoint
     # ======================
     save_checkpoint(
         "checkpoints/latest.pth",
-        model, optimizer, None,
-        epoch, global_step, best_loss
+        model, optimizer, scheduler,
+        epoch, global_step, best_zxing
     )
-    if avg_loss < best_loss:
-        best_loss = avg_loss
+    if val_zxing > best_zxing:
+        best_zxing = val_zxing
         save_checkpoint(
             "checkpoints/best.pth",
-            model, optimizer, None,
-            epoch, global_step, best_loss
+            model, optimizer, scheduler,
+            epoch, global_step, best_zxing
         )
