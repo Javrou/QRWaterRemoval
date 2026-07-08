@@ -11,31 +11,31 @@ ssim_loss = SSIM(data_range=1.0, size_average=True, channel=3)
 # Binary Loss
 # ======================
 def binary_loss(pred, gt):
+
     pred_gray = (
-            0.299 * pred[:, 0:1]
-            +
-            0.587 * pred[:, 1:2]
-            +
-            0.114 * pred[:, 2:3]
+        0.299*pred[:,0:1]
+        +
+        0.587*pred[:,1:2]
+        +
+        0.114*pred[:,2:3]
     )
-
     gt_gray = (
-            0.299 * gt[:, 0:1]
-            +
-            0.587 * gt[:, 1:2]
-            +
-            0.114 * gt[:, 2:3]
+        0.299*gt[:,0:1]
+        +
+        0.587*gt[:,1:2]
+        +
+        0.114*gt[:,2:3]
     )
-
-    pred_binary = torch.sigmoid(
-        (pred_gray - 0.5) * 10
+    pred_gray = pred_gray.float()
+    gt_gray = gt_gray.float()
+    pred_gray = torch.clamp(
+        pred_gray,
+        1e-6,
+        1-1e-6
     )
-
-    gt_binary = (gt_gray > 0.5).float()
-
     return F.binary_cross_entropy(
-        pred_binary,
-        gt_binary
+        pred_gray,
+        gt_gray
     )
 
 
