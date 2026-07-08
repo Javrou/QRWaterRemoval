@@ -7,7 +7,7 @@ import random
 
 random.seed(42)
 
-root = Path("../raw_data/real_data")
+root = Path("../raw_data/7k_real_dataset")
 
 input_dir = root / "input"
 target_dir = root / "target"

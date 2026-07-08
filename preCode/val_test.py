@@ -73,7 +73,7 @@ if __name__ == "__main__":
     # validation
 
     generate_degraded_dataset(
-        "../raw_data/synthetic/val/target",
+        "../synthetic_dataset/val/target",
         "raw_data/synthetic/val",
         seed=100
     )
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     # test
 
     generate_degraded_dataset(
-        "../raw_data/synthetic/test/target",
+        "../synthetic_dataset/test/target",
         "raw_data/synthetic/test",
         seed=200
     )
