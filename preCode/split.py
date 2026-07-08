@@ -26,7 +26,7 @@ START_INDEX = 1
 PAD_RATIO = 0.01
 
 RAW_DIR = "real_data/raw_target"
-SAVE_DIR = "../real_data/target"
+SAVE_DIR = "../raw_data/real_data/target"
 PREVIEW_DIR = "real_data/preview"
 
 os.makedirs(SAVE_DIR, exist_ok=True)
