@@ -253,12 +253,12 @@ def finetune(checkpoint_path):
         print("======================\n")
 
         loss_improved = (
-            best_metrics["loss"] - val_loss
-        ) > min_delta_loss
+                                best_metrics["loss"] - val_loss
+                        ) > min_delta_loss
 
         zxing_improved = (
-            val_zxing - best_metrics["zxing"]
-        ) > min_delta_zxing
+                                 val_zxing - best_metrics["zxing"]
+                         ) > min_delta_zxing
 
         # ======================
         # checkpoint
@@ -366,3 +366,9 @@ def finetune(checkpoint_path):
             break
 
     print("Training finished")
+
+
+if __name__ == "__main__":
+    finetune(
+        "checkpoints/best_zxing.pth"
+    )
