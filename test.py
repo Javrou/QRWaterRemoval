@@ -2,7 +2,7 @@ import torch
 import zxingcpp
 
 from model.restormer import Restormer
-from tool.data_loader import test_loader
+from tool.pretrain_data_loader import test_loader
 from tool.checkpoints import load_checkpoint
 
 
@@ -31,17 +31,19 @@ def main():
     # ======================
     # Load checkpoint
     # ======================
-    ckpt_path = "checkpoints/best_v1.pth"
+    ckpt_path = "checkpoints/best.pth"
 
-    epoch, step, best_loss = load_checkpoint(
+    epoch, step, best_metrics = load_checkpoint(
         ckpt_path,
         model,
         optimizer=None,
         scheduler=None,
         device=device
     )
-
-    print(f"Loaded: epoch={epoch}, step={step}, loss={best_loss}")
+    print(f"Epoch : {epoch}")
+    print(f"Step  : {step}")
+    for k, v in best_metrics.items():
+        print(f"{k:12}: {v:.6f}")
 
     model.eval()
 
