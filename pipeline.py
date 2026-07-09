@@ -6,13 +6,11 @@ from finetune import finetune
 
 
 def main():
-
     print("====================")
     print("Stage 1: Pretrain")
     print("====================")
     pretrain_path = pretrain()
     if not os.path.exists(pretrain_path):
-
         raise RuntimeError(
             "Pretrain checkpoint not found"
         )
@@ -20,9 +18,7 @@ def main():
     print("====================")
     print("Stage 2: Fine-tune")
     print("====================")
-    finetune(
-        checkpoint_path=pretrain_path
-    )
+    finetune(checkpoint_path=pretrain_path)
     print("====================")
     print("ALL TRAINING FINISHED")
     print("====================")
