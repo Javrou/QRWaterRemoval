@@ -114,16 +114,25 @@ def zxing_proxy_loss(pred, tau=0.1):
 # ======================
 # Total Loss
 # ======================
-def compute_loss(pred, gt):
+def compute_loss(pred, gt, mode="pretrain"):
     l1 = l1_loss(pred, gt)
     ssim = ssim_loss(pred, gt)
 
-    loss = (
+    if mode == "pretrain":
+        loss = (
             1.0 * l1 +
             0.10 * ssim +
             0.25 * edge_loss(pred, gt) +
             0.10 * binary_loss(pred, gt) +
             0.08 * zxing_proxy_loss(pred)
-    )
+        )
+    elif mode == "finetune":
+        loss = (
+            0.6 * l1 +
+            0.05 * ssim +
+            0.35 * edge_loss(pred, gt) +
+            0.20 * binary_loss(pred, gt) +
+            0.15 * zxing_proxy_loss(pred)
+        )
 
     return loss

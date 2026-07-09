@@ -47,13 +47,10 @@ def pretrain():
                 inp = inp.to(device)
                 tgt = tgt.to(device)
                 pred = model(inp).clamp(0, 1)
-                loss = compute_loss(
-                    pred,
-                    tgt
-                )
-
+                loss = compute_loss(pred, tgt, mode="pretrain")
                 total_loss += loss.item()
                 imgs = pred.cpu()
+
                 for i in range(imgs.shape[0]):
                     img = imgs[i]
 

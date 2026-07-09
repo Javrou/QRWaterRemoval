@@ -114,7 +114,7 @@ def finetune(checkpoint_path):
                 pred = pred.clamp(0, 1)
 
                 # loss
-                loss = compute_loss(pred, tgt)
+                loss = compute_loss(pred, tgt, mode="finetune")
                 total_loss += loss.item()
 
                 # PSNR
