@@ -42,22 +42,6 @@ class MixedQRDataset(Dataset):
             self.synthetic_target.glob("*.png")
         )
 
-        print("====================")
-        print("Mixed Dataset")
-        print(
-            "Real:",
-            len(self.real_files)
-        )
-        print(
-            "Synthetic:",
-            len(self.synthetic_files)
-        )
-        print(
-            "Synthetic ratio:",
-            synthetic_ratio
-        )
-        print("====================")
-
         self.length = (
             len(self.real_files)
             +
