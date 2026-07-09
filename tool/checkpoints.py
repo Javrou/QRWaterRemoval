@@ -10,6 +10,7 @@ def save_checkpoint(
         model,
         optimizer=None,
         scheduler=None,
+        scaler=None,
         epoch=0,
         step=0,
         best_metrics=None
@@ -26,6 +27,8 @@ def save_checkpoint(
         checkpoint["optimizer"] = optimizer.state_dict()
     if scheduler is not None:
         checkpoint["scheduler"] = scheduler.state_dict()
+    if scaler is not None:
+        checkpoint["scaler"] = scaler.state_dict()
     torch.save(checkpoint, path)
 
 
@@ -34,6 +37,7 @@ def load_checkpoint(
         model,
         optimizer=None,
         scheduler=None,
+        scaler=None,
         device="cpu",
 ):
     checkpoint = torch.load(
@@ -46,8 +50,11 @@ def load_checkpoint(
         optimizer.load_state_dict(checkpoint["optimizer"])
     if scheduler is not None and "scheduler" in checkpoint:
         scheduler.load_state_dict(checkpoint["scheduler"])
+    if scaler is not None and "scaler" in checkpoint:
+        scaler.load_state_dict(checkpoint["scaler"])
 
     epoch = checkpoint.get("epoch", 0)
     step = checkpoint.get("step", 0)
     best_metrics = checkpoint.get("best_metrics", {})
+
     return epoch, step, best_metrics

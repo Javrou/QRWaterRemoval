@@ -14,10 +14,11 @@ class StepLogger:
                     "loss",
                     "lr",
                     "grad_norm",
-                    "zxing"
+                    "zxing",
+                    "binary_acc"
                 ])
 
-    def log(self, epoch, step, loss, lr, grad_norm=None, zxing=None):
+    def log(self, epoch, step, loss, lr, grad_norm=None, zxing=None, binary_acc=None):
         with open(self.path, "a", newline="") as f:
             csv.writer(f).writerow([
                 epoch,
@@ -25,7 +26,8 @@ class StepLogger:
                 loss,
                 lr,
                 grad_norm,
-                zxing
+                zxing,
+                binary_acc
             ])
 
 
@@ -43,6 +45,7 @@ class EpochLogger:
                     "zxing",
                     "psnr",
                     "ssim",
+                    "binary_acc",
                     "best_loss",
                     "best_zxing",
                     "best_psnr",
@@ -58,6 +61,7 @@ class EpochLogger:
         zxing,
         psnr,
         ssim,
+        binary_acc,
         best_loss,
         best_zxing,
         best_psnr,
@@ -72,6 +76,7 @@ class EpochLogger:
                 zxing,
                 psnr,
                 ssim,
+                binary_acc,
                 best_loss,
                 best_zxing,
                 best_psnr,
