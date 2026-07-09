@@ -2,13 +2,11 @@ import time
 import torch.optim as optim
 from torch.amp import autocast, GradScaler
 
-import zxingcpp
-
 from model.restormer import Restormer
 from tool.finetune_data_loader import *
-from loss import *
 from tool.train_logger import *
 from tool.checkpoints import *
+from tool.validator import *
 
 
 def finetune(checkpoint_path):
@@ -35,142 +33,78 @@ def finetune(checkpoint_path):
         f"{sum(p.numel() for p in model.parameters()) / 1e6:.2f} M"
     )
 
-    # ======================
-    # 加载预训练 v1 模型
-    # ======================
+    num_epochs = 20
+    resume = False
+    resume_path = "checkpoints/real_latest.pth"
+
     optimizer = optim.AdamW(
         model.parameters(),
         lr=5e-5,
         weight_decay=1e-4
     )
-    num_epochs = 15
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
         T_max=num_epochs,
         eta_min=1e-6
     )
-
-    epoch, step, metrics = load_checkpoint(
-        checkpoint_path,
-        model,
-        optimizer=None,
-        scheduler=None,
-        device=device
-    )
-    print("Loaded:", metrics)
-
     scaler = GradScaler("cuda")
-
-    def zxing_rate(batch_tensor):
-        success = 0
-        total = batch_tensor.shape[0]
-        imgs = batch_tensor.detach().cpu()
-        for i in range(total):
-            img = imgs[i]
-            img = img.permute(1, 2, 0).numpy()
-            img = (img * 255) \
-                .clip(0, 255) \
-                .astype("uint8")
-            results = zxingcpp.read_barcodes(img)
-            if len(results) > 0:
-                success += 1
-
-        return success / total
-
-    # ======================
-    # PSNR
-    # ======================
-    def calculate_psnr(pred, gt):
-        mse = F.mse_loss(pred, gt)
-
-        if mse == 0:
-            return 100
-
-        return (
-                10 *
-                torch.log10(
-                    1.0 / mse
-                )
-        ).item()
-
-    # ======================
-    # Validation
-    # ======================
-    def validate(model):
-        model.eval()
-
-        total_loss = 0
-        total_psnr = 0
-        total_ssim = 0
-        total_success = 0
-        total_num = 0
-
-        with torch.no_grad():
-            for inp, tgt in val_loader:
-                inp = inp.to(device)
-                tgt = tgt.to(device)
-
-                pred = model(inp)
-                pred = pred.clamp(0, 1)
-
-                # loss
-                loss = compute_loss(pred, tgt, mode="finetune")
-                total_loss += loss.item()
-
-                # PSNR
-                total_psnr += calculate_psnr(
-                    pred,
-                    tgt
-                )
-
-                # SSIM
-                ssim_value = (
-                        1 - ssim_loss(pred, tgt)
-                )
-                total_ssim += ssim_value.item()
-
-                # ZXing
-                sr = zxing_rate(pred)
-
-                total_success += (
-                        sr * inp.size(0)
-                )
-
-                total_num += inp.size(0)
-
-        avg_loss = total_loss / len(val_loader)
-        avg_psnr = total_psnr / len(val_loader)
-        avg_ssim = total_ssim / len(val_loader)
-        zxing = total_success / total_num
-
-        return (
-            avg_loss,
-            zxing,
-            avg_psnr,
-            avg_ssim
-        )
 
     # ======================
     # Training
     # ======================
     step_logger = StepLogger("logs/finetune/train_step.csv")
     epoch_logger = EpochLogger("logs/finetune/epoch_metrics.csv")
-    global_step = 0
     best_metrics = {
         "loss": float("inf"),
         "zxing": 0.0,
         "psnr": 0.0,
-        "ssim": 0.0
+        "ssim": 0.0,
     }
     patience = 5
     min_epochs = 5
-
     min_delta_loss = 0.001
     min_delta_zxing = 0.001
 
     early_stop_counter = 0
 
-    for epoch in range(num_epochs):
+    start_epoch = 0
+    global_step = 0
+    if resume:
+        start_epoch, global_step, ckpt_metrics = load_checkpoint(
+            path=resume_path,
+            model=model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            scaler=scaler,
+            device=device
+        )
+        start_epoch += 1
+        if len(ckpt_metrics):
+            best_metrics["loss"] = ckpt_metrics["best_loss"]
+            best_metrics["zxing"] = ckpt_metrics["best_zxing"]
+            best_metrics["psnr"] = ckpt_metrics["best_psnr"]
+            best_metrics["ssim"] = ckpt_metrics["best_ssim"]
+        print("=" * 40)
+        print("Resume Fine-tune")
+        print("Epoch :", start_epoch)
+        print("Step  :", global_step)
+        print("Best ZXing :", best_metrics["zxing"])
+        print("=" * 40)
+    else:
+        load_checkpoint(
+            path=checkpoint_path,
+            model=model,
+            optimizer=None,
+            scheduler=None,
+            scaler=None,
+            device=device
+        )
+        print("=" * 40)
+        print("Load Pretrained")
+        print(checkpoint_path)
+        print("=" * 40)
+
+    for epoch in range(start_epoch, num_epochs):
         model.train()
         running_loss = 0
         t_epoch = time.time()
@@ -216,12 +150,15 @@ def finetune(checkpoint_path):
                     step=global_step,
                     loss=loss.item(),
                     lr=optimizer.param_groups[0]["lr"],
-                    grad_norm=grad_norm
+                    grad_norm=grad_norm,
+                    zxing=None,
+                    binary_acc=None
                 )
             if (i + 1) % 60 == 0:
                 with torch.no_grad():
                     pred_vis = pred.clamp(0, 1)
                     sr = zxing_rate(pred_vis)
+                    ba = binary_accuracy(pred_vis, tgt)
                 print(f"[ZXing @ step {i + 1}] {sr:.4f}")
                 step_logger.log(
                     epoch=epoch,
@@ -229,66 +166,66 @@ def finetune(checkpoint_path):
                     loss=loss.item(),
                     lr=optimizer.param_groups[0]["lr"],
                     grad_norm=grad_norm,
-                    zxing=sr
+                    zxing=sr,
+                    binary_acc=ba
                 )
 
         # ======================
         # Epoch validation
         # ======================
-
-        train_loss = (
-                running_loss /
-                len(train_loader)
-        )
-        val_loss, val_zxing, val_psnr, val_ssim = validate(model)
+        train_loss = (running_loss / len(train_loader))
+        val_metrics = validate(model, val_loader, device, mode="finetune")
 
         print("\n======================")
         print(f"Epoch {epoch} finished")
         print("Time:", time.time() - t_epoch)
         print(f"Train Loss: {train_loss:.6f}")
-        print(f"Validation Loss: {val_loss:.6f}")
-        print(f"Validation ZXing Rate: "f"{val_zxing:.4f}")
-        print(f"Validation PSNR: "f"{val_psnr:.4f}")
-        print(f"Validation SSIM: "f"{val_ssim:.4f}")
+        print(f"Validation Loss: {val_metrics['loss']:.6f}")
+        print(f"Validation ZXing Rate: {val_metrics['zxing']:.4f}")
+        print(f"Validation PSNR: {val_metrics['psnr']:.4f}")
+        print(f"Validation SSIM: {val_metrics['ssim']:.4f}")
+        print(f"Validation Binary Accuracy: {val_metrics['binary_acc']:.4f}")
         print("======================\n")
-
-        loss_improved = (
-                                best_metrics["loss"] - val_loss
-                        ) > min_delta_loss
-
-        zxing_improved = (
-                                 val_zxing - best_metrics["zxing"]
-                         ) > min_delta_zxing
-
         # ======================
         # checkpoint
         # ======================
         is_best_loss = False
         is_best_zxing = False
-        if val_loss < best_metrics["loss"]:
-            best_metrics["loss"] = val_loss
-            is_best_loss = True
+        loss_improved = (
+            best_metrics["loss"] - val_metrics["loss"]
+        ) > min_delta_loss
+        zxing_improved = (
+            val_metrics["zxing"] - best_metrics["zxing"]
+        ) > min_delta_zxing
 
-        if val_zxing > best_metrics["zxing"]:
-            best_metrics["zxing"] = val_zxing
-            best_metrics["psnr"] = val_psnr
-            best_metrics["ssim"] = val_ssim
+        if val_metrics["loss"] < best_metrics["loss"]:
+            best_metrics["loss"] = val_metrics["loss"]
+            is_best_loss = True
+        if val_metrics["zxing"] > best_metrics["zxing"]:
+            best_metrics["zxing"] = val_metrics["zxing"]
+            best_metrics["psnr"] = val_metrics["psnr"]
+            best_metrics["ssim"] = val_metrics["ssim"]
+            best_metrics["binary_acc"] = val_metrics["binary_acc"]
             is_best_zxing = True
+
         metrics = {
-            "loss": val_loss,
-            "zxing": val_zxing,
-            "psnr": val_psnr,
-            "ssim": val_ssim,
+            "loss": val_metrics["loss"],
+            "zxing": val_metrics["zxing"],
+            "psnr": val_metrics["psnr"],
+            "ssim": val_metrics["ssim"],
+            "binary_acc": val_metrics["binary_acc"],
             "best_loss": best_metrics["loss"],
             "best_zxing": best_metrics["zxing"],
             "best_psnr": best_metrics["psnr"],
-            "best_ssim": best_metrics["ssim"]
+            "best_ssim": best_metrics["ssim"],
+            "best_binary_acc": best_metrics["binary_acc"]
         }
         save_checkpoint(
             path="checkpoints/real_latest.pth",
             model=model,
             optimizer=optimizer,
             scheduler=scheduler,
+            scaler=scaler,
             epoch=epoch,
             step=global_step,
             best_metrics=metrics
@@ -299,6 +236,7 @@ def finetune(checkpoint_path):
                 model=model,
                 optimizer=optimizer,
                 scheduler=scheduler,
+                scaler=scaler,
                 epoch=epoch,
                 step=global_step,
                 best_metrics=metrics
@@ -313,6 +251,7 @@ def finetune(checkpoint_path):
                 model=model,
                 optimizer=optimizer,
                 scheduler=scheduler,
+                scaler=scaler,
                 epoch=epoch,
                 step=global_step,
                 best_metrics=metrics
@@ -324,17 +263,17 @@ def finetune(checkpoint_path):
         epoch_logger.log(
             epoch=epoch,
             train_loss=train_loss,
-            val_loss=val_loss,
+            val_loss=val_metrics["loss"],
             lr=optimizer.param_groups[0]["lr"],
-            zxing=val_zxing,
-            psnr=val_psnr,
-            ssim=val_ssim,
+            zxing=val_metrics["zxing"],
+            psnr=val_metrics["psnr"],
+            ssim=val_metrics["ssim"],
+            binary_acc=val_metrics["binary_acc"],
             best_loss=best_metrics["loss"],
             best_zxing=best_metrics["zxing"],
             best_psnr=best_metrics["psnr"],
             best_ssim=best_metrics["ssim"]
         )
-
         # ======================
         # Early Stopping
         # ======================

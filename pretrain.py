@@ -4,79 +4,15 @@ import numpy as np
 import torch.optim as optim
 from torch.amp import autocast, GradScaler
 
-import zxingcpp
-
 from model.restormer import Restormer
 from tool.pretrain_data_loader import *
-from loss import *
 from tool.train_logger import *
-from tool.checkpoints import save_checkpoint
+from tool.checkpoints import *
+from tool.validator import *
 
 
 def pretrain():
-    # ======================
-    # ZXing eval
-    # ======================
-    def zxing_rate(batch_tensor):
-        success = 0
-        total = batch_tensor.shape[0]
-        imgs = batch_tensor.detach().cpu()
-
-        for i in range(total):
-            img = imgs[i]
-            # CHW -> HWC
-            img = img.permute(1, 2, 0).numpy()
-            img = (img * 255).astype("uint8")
-            results = zxingcpp.read_barcodes(img)
-            if len(results) > 0:
-                success += 1
-
-        return success / total
-
-    # ======================
-    # Validation
-    # ======================
-    def validate(model, loader):
-        model.eval()
-        total_success = 0
-        total_num = 0
-        total_loss = 0
-
-        with torch.no_grad():
-            for inp, tgt in loader:
-                inp = inp.to(device)
-                tgt = tgt.to(device)
-                pred = model(inp).clamp(0, 1)
-                loss = compute_loss(pred, tgt, mode="pretrain")
-                total_loss += loss.item()
-                imgs = pred.cpu()
-
-                for i in range(imgs.shape[0]):
-                    img = imgs[i]
-
-                    img = img.permute(
-                        1, 2, 0
-                    ).numpy()
-
-                    img = (img * 255).astype(
-                        "uint8"
-                    )
-                    result = zxingcpp.read_barcodes(
-                        img
-                    )
-                    if len(result) > 0:
-                        total_success += 1
-                    total_num += 1
-
-        return {
-            "loss": total_loss / len(loader),
-            "zxing": total_success / total_num,
-            "psnr": 0.0,
-            "ssim": 0.0
-        }
-
     seed = 42
-
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -102,6 +38,9 @@ def pretrain():
     print(f"Parameters: {sum(p.numel() for p in model.parameters()) / 1e6:.2f} M")
 
     num_epochs = 30
+    # 断点续训
+    resume = True
+    resume_path = "checkpoints/latest.pth"
 
     # optimizer with AMP
     optimizer = optim.AdamW(
@@ -127,23 +66,42 @@ def pretrain():
         "loss": float("inf"),
         "zxing": 0.0,
         "psnr": 0.0,
-        "ssim": 0.0
+        "ssim": 0.0,
     }
 
     patience = 6  # 连续6个epoch无提升
     min_delta_loss = 1e-3  # loss至少下降0.001
     min_delta_zxing = 0.002  # ZXing至少提升0.2%
     min_epochs = 15
-    early_stop_zxing = 0.90
 
+    early_stop_zxing = 0.90
     early_stop_counter = 0
 
-    best_val_loss = float("inf")
-    best_val_zxing = 0.0
+    start_epoch = 0
     global_step = 0
+    if resume:
+        start_epoch, global_step, ckpt_metrics = load_checkpoint(
+            path=resume_path,
+            model=model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            scaler=scaler,
+            device=device
+        )
+        start_epoch += 1
+        if len(ckpt_metrics):
+            best_metrics["loss"] = ckpt_metrics["best_loss"]
+            best_metrics["zxing"] = ckpt_metrics["best_zxing"]
+            best_metrics["psnr"] = ckpt_metrics["best_psnr"]
+            best_metrics["ssim"] = ckpt_metrics["best_ssim"]
+        print("=" * 40)
+        print("Resume Training")
+        print("Epoch:", start_epoch)
+        print("Step :", global_step)
+        print("Best ZXing:", best_metrics["zxing"])
+        print("=" * 40)
 
-    running_loss = 0.0
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, num_epochs):
         model.train()
         running_loss = 0.0
         t_epoch = time.time()
@@ -189,7 +147,9 @@ def pretrain():
                     step=global_step,
                     loss=loss.item(),
                     lr=optimizer.param_groups[0]["lr"],
-                    grad_norm=total_norm
+                    grad_norm=total_norm,
+                    zxing=None,
+                    binary_acc=None
                 )
 
             # zxing eval
@@ -197,21 +157,23 @@ def pretrain():
                 with torch.no_grad():
                     pred_vis = pred.clamp(0, 1)
                     sr = zxing_rate(pred_vis)
+                    ba = binary_accuracy(pred_vis, tgt)
                 print(f"[ZXing @ step {i + 1}] {sr:.4f}")
+                print(f"BinaryAcc={ba:.4f}")
                 step_logger.log(
                     epoch=epoch,
                     step=global_step,
                     loss=loss.item(),
                     lr=optimizer.param_groups[0]["lr"],
                     grad_norm=total_norm,
-                    zxing=sr
+                    zxing=sr,
+                    binary_acc=ba
                 )
 
         # ======================
         # Epoch summary
         # ======================
         avg_loss = running_loss / len(train_loader)
-
         print("\nEpoch finished")
         print("Epoch time:", time.time() - t_epoch)
         print("Avg Loss:", avg_loss)
@@ -219,11 +181,12 @@ def pretrain():
         scheduler.step()
         print("Current LR:", optimizer.param_groups[0]['lr'])
 
-        val_metrics = validate(model, val_loader)
+        val_metrics = validate(model, val_loader, device, mode="pretrain")
         print("Validation Loss :", val_metrics["loss"])
         print("Validation ZXing:", val_metrics["zxing"])
         print("Validation PSNR :", val_metrics["psnr"])
         print("Validation SSIM :", val_metrics["ssim"])
+        print("Validation Binary Accuracy:", val_metrics["binary_acc"])
         # ======================
         # checkpoint
         # ======================
@@ -231,19 +194,20 @@ def pretrain():
         is_best_zxing = False
         # ---------- Loss ----------
         loss_improved = (
-                                best_metrics["loss"] - val_metrics["loss"]
-                        ) > min_delta_loss
+            best_metrics["loss"] - val_metrics["loss"]
+        ) > min_delta_loss
         if loss_improved:
             best_metrics["loss"] = val_metrics["loss"]
             is_best_loss = True
         # ---------- ZXing ----------
         zxing_improved = (
-                                 val_metrics["zxing"] - best_metrics["zxing"]
-                         ) > min_delta_zxing
+            val_metrics["zxing"] - best_metrics["zxing"]
+        ) > min_delta_zxing
         if zxing_improved:
             best_metrics["zxing"] = val_metrics["zxing"]
             best_metrics["psnr"] = val_metrics["psnr"]
             best_metrics["ssim"] = val_metrics["ssim"]
+            best_metrics["binary_acc"] = val_metrics["binary_acc"]
             is_best_zxing = True
         # ---------- latest metrics ----------
         latest_metrics = {
@@ -251,6 +215,7 @@ def pretrain():
             "zxing": val_metrics["zxing"],
             "psnr": val_metrics["psnr"],
             "ssim": val_metrics["ssim"],
+            "binary_acc": val_metrics["binary_acc"],
             "best_loss": best_metrics["loss"],
             "best_zxing": best_metrics["zxing"],
             "best_psnr": best_metrics["psnr"],
@@ -262,6 +227,7 @@ def pretrain():
             model=model,
             optimizer=optimizer,
             scheduler=scheduler,
+            scaler=scaler,
             epoch=epoch,
             step=global_step,
             best_metrics=latest_metrics
@@ -273,6 +239,7 @@ def pretrain():
                 model=model,
                 optimizer=optimizer,
                 scheduler=scheduler,
+                scaler=scaler,
                 epoch=epoch,
                 step=global_step,
                 best_metrics=latest_metrics
@@ -285,6 +252,7 @@ def pretrain():
                 model=model,
                 optimizer=optimizer,
                 scheduler=scheduler,
+                scaler=scaler,
                 epoch=epoch,
                 step=global_step,
                 best_metrics=latest_metrics
@@ -298,6 +266,7 @@ def pretrain():
             zxing=val_metrics["zxing"],
             psnr=val_metrics["psnr"],
             ssim=val_metrics["ssim"],
+            binary_acc=val_metrics["binary_acc"],
             best_loss=best_metrics["loss"],
             best_zxing=best_metrics["zxing"],
             best_psnr=best_metrics["psnr"],
