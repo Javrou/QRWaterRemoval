@@ -17,8 +17,8 @@ def main():
     # Model
     # ======================
     model = Restormer(
-        inp_channels=3,
-        out_channels=3,
+        inp_channels=1,
+        out_channels=1,
         dim=24,
         num_blocks=[2, 2, 2, 3],
         num_refinement_blocks=1,
