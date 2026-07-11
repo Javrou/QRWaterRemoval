@@ -10,7 +10,7 @@ random.seed(42)
 root = Path("../raw_data/7k_real_dataset")
 
 input_dir = root / "input"
-target_dir = root / "target"
+target_dir = root / "png_target"
 
 names = sorted([p.name for p in input_dir.glob("*")])
 

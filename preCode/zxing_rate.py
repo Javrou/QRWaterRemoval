@@ -10,7 +10,7 @@ import time
 # 配置
 # ==========================
 
-IMAGE_DIR = "../synthetic_dataset/val/input"
+IMAGE_DIR = "../raw_data/7k_real_dataset/png_target"
 
 # 支持格式
 EXTENSIONS = [

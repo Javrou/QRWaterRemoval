@@ -6,10 +6,10 @@ import numpy as np
 from pathlib import Path
 
 input_dir = Path("../raw_data/qr_code_waterdrop/input")
-target_dir = Path("../raw_data/qr_code_waterdrop/target")
+target_dir = Path("../raw_data/7k_real_dataset/png_target")
 
 out_input = Path("../raw_data/qr_code_waterdrop/input")
-out_target = Path("../raw_data/qr_code_waterdrop/target")
+out_target = Path("../raw_data/7k_real_dataset/png_target")
 
 out_input.mkdir(parents=True, exist_ok=True)
 out_target.mkdir(parents=True, exist_ok=True)
@@ -27,7 +27,8 @@ def resize_keep_aspect(img, size=256):
     canvas[y_offset:y_offset + nh, x_offset:x_offset + nw] = resized
     return canvas
 
-for f in input_dir.glob("*.png"):
+
+for f in target_dir.glob("*.png"):
     img_in = cv2.imread(str(f))
     img_tar = cv2.imread(str(target_dir / f.name))
     if img_in is None or img_tar is None:
