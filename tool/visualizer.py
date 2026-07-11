@@ -6,9 +6,9 @@ import torch
 
 def tensor2img(x):
     x = x.detach().cpu().clamp(0, 1)
-    x = x.permute(1, 2, 0).numpy()
-    x = (x * 255).astype(np.uint8)
-    return cv2.cvtColor(x, cv2.COLOR_RGB2BGR)
+    x = x[0].numpy()
+    x = (x*225).astype(np.uint8)
+    return x
 
 
 def save_visual_results(
@@ -21,15 +21,11 @@ def save_visual_results(
 ):
     model.eval()
 
-    os.makedirs(
-        os.path.join(save_dir, f"epoch_{epoch:03d}"),
-        exist_ok=True
-    )
+    epoch_dir = os.path.join(save_dir, f"epoch_{epoch:03d}")
+    os.makedirs(epoch_dir, exist_ok=True)
 
     with torch.no_grad():
-
         sample_id = 0
-
         for inp, tgt in loader:
 
             inp = inp.to(device)
@@ -52,6 +48,7 @@ def save_visual_results(
                         ],
                         axis=1
                     )
+                    result = cv2.cvtColor(result, cv2.COLOR_GRAY2BGR)
 
                     cv2.putText(
                         result,
@@ -84,11 +81,7 @@ def save_visual_results(
                     )
 
                     cv2.imwrite(
-                        os.path.join(
-                            save_dir,
-                            f"epoch_{epoch:03d}",
-                            f"sample_{sample_id:04d}.png"
-                        ),
+                        os.path.join(epoch_dir, f"sample_{sample_id:04d}.png"),
                         result
                     )
 
