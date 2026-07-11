@@ -103,8 +103,6 @@ def finetune(checkpoint_path):
         print("Load Pretrained")
         print(checkpoint_path)
         print("=" * 40)
-        metrics = validate(model, val_loader, device, mode="finetune")
-        print("Before Finetune:", metrics)
 
     for epoch in range(start_epoch, num_epochs):
         model.train()
