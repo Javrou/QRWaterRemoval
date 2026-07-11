@@ -1,6 +1,3 @@
-"""
-保存 pth
-"""
 import os
 import torch
 
@@ -8,6 +5,7 @@ import torch
 def save_checkpoint(
         path,
         model,
+        ema=None,
         optimizer=None,
         scheduler=None,
         scaler=None,
@@ -23,29 +21,41 @@ def save_checkpoint(
         "model": model.state_dict(),
         "best_metrics": best_metrics if best_metrics is not None else {}
     }
+
+    if ema is not None:
+        checkpoint["ema"] = ema.state_dict()
     if optimizer is not None:
         checkpoint["optimizer"] = optimizer.state_dict()
     if scheduler is not None:
         checkpoint["scheduler"] = scheduler.state_dict()
     if scaler is not None:
         checkpoint["scaler"] = scaler.state_dict()
+
     torch.save(checkpoint, path)
 
 
 def load_checkpoint(
         path,
         model,
+        ema=None,
         optimizer=None,
         scheduler=None,
         scaler=None,
-        device="cpu",
+        device="cpu"
 ):
     checkpoint = torch.load(
         path,
         map_location=device,
         weights_only=False
     )
+
     model.load_state_dict(checkpoint["model"])
+
+    if ema is not None:
+        if "ema" in checkpoint:
+            ema.load_state_dict(checkpoint["ema"])
+        else:
+            ema.load_state_dict(checkpoint["model"])
     if optimizer is not None and "optimizer" in checkpoint:
         optimizer.load_state_dict(checkpoint["optimizer"])
     if scheduler is not None and "scheduler" in checkpoint:

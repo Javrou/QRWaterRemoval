@@ -15,10 +15,9 @@ class StepLogger:
                     "lr",
                     "grad_norm",
                     "zxing",
-                    "binary_acc"
                 ])
 
-    def log(self, epoch, step, loss, lr, grad_norm=None, zxing=None, binary_acc=None):
+    def log(self, epoch, step, loss, lr, grad_norm=None, zxing=None):
         with open(self.path, "a", newline="") as f:
             csv.writer(f).writerow([
                 epoch,
@@ -27,7 +26,6 @@ class StepLogger:
                 lr,
                 grad_norm,
                 zxing,
-                binary_acc
             ])
 
 

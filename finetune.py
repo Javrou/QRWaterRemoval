@@ -7,9 +7,10 @@ from tool.finetune_data_loader import *
 from tool.train_logger import *
 from tool.checkpoints import *
 from tool.validator import *
+from tool.ema import *
 
 
-def finetune(checkpoint_path):
+def finetune():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Device:", device)
     print("Torch:", torch.__version__)
@@ -32,20 +33,24 @@ def finetune(checkpoint_path):
         f"Parameters: "
         f"{sum(p.numel() for p in model.parameters()) / 1e6:.2f} M"
     )
+    ema = ModelEMA(model, decay=0.999)
 
-    num_epochs = 20
+    num_epochs = 40
     resume = False
     resume_path = "checkpoints/real_latest.pth"
 
     optimizer = optim.AdamW(
         model.parameters(),
-        lr=2e-5,
+        lr=8e-5,
         weight_decay=1e-4
     )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
-        T_max=num_epochs,
-        eta_min=2e-6
+        mode='min',
+        factor=0.5,
+        patience=3,
+        threshold=1e-3,
+        min_lr=1e-6
     )
     scaler = GradScaler("cuda")
 
@@ -73,6 +78,7 @@ def finetune(checkpoint_path):
         start_epoch, global_step, ckpt_metrics = load_checkpoint(
             path=resume_path,
             model=model,
+            ema=ema.ema,
             optimizer=optimizer,
             scheduler=scheduler,
             scaler=scaler,
@@ -89,19 +95,6 @@ def finetune(checkpoint_path):
         print("Epoch :", start_epoch)
         print("Step  :", global_step)
         print("Best ZXing :", best_metrics["zxing"])
-        print("=" * 40)
-    else:
-        load_checkpoint(
-            path=checkpoint_path,
-            model=model,
-            optimizer=None,
-            scheduler=None,
-            scaler=None,
-            device=device
-        )
-        print("=" * 40)
-        print("Load Pretrained")
-        print(checkpoint_path)
         print("=" * 40)
 
     for epoch in range(start_epoch, num_epochs):
@@ -127,12 +120,12 @@ def finetune(checkpoint_path):
             scaler.unscale_(optimizer)
             grad_norm = torch.nn.utils.clip_grad_norm_(
                 model.parameters(),
-                1e9
+                4
             ).item()
-            scaler.step(
-                optimizer
-            )
+            scaler.step(optimizer)
             scaler.update()
+            ema.update(model)
+
             running_loss += loss.item()
             global_step += 1
 
@@ -151,14 +144,12 @@ def finetune(checkpoint_path):
                     loss=loss.item(),
                     lr=optimizer.param_groups[0]["lr"],
                     grad_norm=grad_norm,
-                    zxing=None,
-                    binary_acc=None
+                    zxing=None
                 )
-            if (i + 1) % 60 == 0:
+            if (i + 1) % 100 == 0:
                 with torch.no_grad():
                     pred_vis = pred.clamp(0, 1)
                     sr = zxing_rate(pred_vis)
-                    ba = binary_accuracy(pred_vis, tgt)
                 print(f"[ZXing @ step {i + 1}] {sr:.4f}")
                 step_logger.log(
                     epoch=epoch,
@@ -166,15 +157,14 @@ def finetune(checkpoint_path):
                     loss=loss.item(),
                     lr=optimizer.param_groups[0]["lr"],
                     grad_norm=grad_norm,
-                    zxing=sr,
-                    binary_acc=ba
+                    zxing=sr
                 )
 
         # ======================
         # Epoch validation
         # ======================
         train_loss = (running_loss / len(train_loader))
-        val_metrics = validate(model, val_loader, device, mode="finetune")
+        val_metrics = validate(ema.ema, val_loader, device, mode="finetune")
 
         print("\n======================")
         print(f"Epoch {epoch} finished")
@@ -186,7 +176,7 @@ def finetune(checkpoint_path):
         print(f"Validation SSIM: {val_metrics['ssim']:.4f}")
         print(f"Validation Binary Accuracy: {val_metrics['binary_acc']:.4f}")
         print("======================\n")
-        scheduler.step()
+        scheduler.step(val_metrics["loss"])
         # ======================
         # checkpoint
         # ======================
@@ -223,6 +213,7 @@ def finetune(checkpoint_path):
         save_checkpoint(
             path="checkpoints/real_latest.pth",
             model=model,
+            ema=ema.ema,
             optimizer=optimizer,
             scheduler=scheduler,
             scaler=scaler,
@@ -234,6 +225,7 @@ def finetune(checkpoint_path):
             save_checkpoint(
                 path="checkpoints/real_best_loss.pth",
                 model=model,
+                ema=ema.ema,
                 optimizer=optimizer,
                 scheduler=scheduler,
                 scaler=scaler,
@@ -249,6 +241,7 @@ def finetune(checkpoint_path):
             save_checkpoint(
                 path="checkpoints/real_best_zxing.pth",
                 model=model,
+                ema=ema.ema,
                 optimizer=optimizer,
                 scheduler=scheduler,
                 scaler=scaler,
@@ -277,7 +270,7 @@ def finetune(checkpoint_path):
         # ======================
         # Early Stopping
         # ======================
-        if loss_improved or zxing_improved:
+        if zxing_improved:
             early_stop_counter = 0
         else:
             early_stop_counter += 1
@@ -308,6 +301,4 @@ def finetune(checkpoint_path):
 
 
 if __name__ == "__main__":
-    finetune(
-        "checkpoints/best_zxing.pth"
-    )
+    finetune()
