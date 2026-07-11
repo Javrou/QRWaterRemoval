@@ -128,11 +128,11 @@ def compute_loss(pred, gt, mode="pretrain"):
         )
     elif mode == "finetune":
         loss = (
-            0.6 * l1 +
+            0.8 * l1 +
             0.05 * ssim +
-            0.35 * edge_loss(pred, gt) +
+            0.30 * edge_loss(pred, gt) +
             0.20 * binary_loss(pred, gt) +
-            0.15 * zxing_proxy_loss(pred)
+            0.13 * zxing_proxy_loss(pred)
         )
 
     return loss

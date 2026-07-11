@@ -39,13 +39,13 @@ def finetune(checkpoint_path):
 
     optimizer = optim.AdamW(
         model.parameters(),
-        lr=5e-5,
+        lr=2e-5,
         weight_decay=1e-4
     )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
         T_max=num_epochs,
-        eta_min=1e-6
+        eta_min=2e-6
     )
     scaler = GradScaler("cuda")
 
@@ -103,6 +103,8 @@ def finetune(checkpoint_path):
         print("Load Pretrained")
         print(checkpoint_path)
         print("=" * 40)
+        metrics = validate(model, val_loader, device, mode="finetune")
+        print("Before Finetune:", metrics)
 
     for epoch in range(start_epoch, num_epochs):
         model.train()
@@ -186,6 +188,7 @@ def finetune(checkpoint_path):
         print(f"Validation SSIM: {val_metrics['ssim']:.4f}")
         print(f"Validation Binary Accuracy: {val_metrics['binary_acc']:.4f}")
         print("======================\n")
+        scheduler.step()
         # ======================
         # checkpoint
         # ======================
@@ -218,7 +221,6 @@ def finetune(checkpoint_path):
             "best_zxing": best_metrics["zxing"],
             "best_psnr": best_metrics["psnr"],
             "best_ssim": best_metrics["ssim"],
-            "best_binary_acc": best_metrics["binary_acc"]
         }
         save_checkpoint(
             path="checkpoints/real_latest.pth",
