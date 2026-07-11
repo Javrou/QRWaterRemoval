@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 train_set = MixedQRDataset(
     real_root=BASE_DIR / "real_dataset/train",
     synthetic_root=BASE_DIR / "synthetic_dataset/train",
-    synthetic_ratio=0.25
+    synthetic_ratio=0.15
 )
 val_set = MixedQRDataset(
     real_root=BASE_DIR / "real_dataset/val",

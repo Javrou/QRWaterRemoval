@@ -24,8 +24,8 @@ def pretrain():
 
     # 轻量restormer
     model = Restormer(
-        inp_channels=3,
-        out_channels=3,
+        inp_channels=1,
+        out_channels=1,
         dim=24,
         num_blocks=[2, 2, 2, 3],
         num_refinement_blocks=1,
@@ -117,11 +117,10 @@ def pretrain():
             # forward
             with autocast(device_type="cuda"):
                 pred = model(inp)
-                loss = compute_loss(pred, tgt)
+                loss = compute_loss(pred, tgt, mode="pretrain")
 
             # backward
             scaler.scale(loss).backward()
-
             scaler.unscale_(optimizer)
             total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1e9).item()
 
@@ -148,8 +147,7 @@ def pretrain():
                     loss=loss.item(),
                     lr=optimizer.param_groups[0]["lr"],
                     grad_norm=total_norm,
-                    zxing=None,
-                    binary_acc=None
+                    zxing=None
                 )
 
             # zxing eval
@@ -157,17 +155,14 @@ def pretrain():
                 with torch.no_grad():
                     pred_vis = pred.clamp(0, 1)
                     sr = zxing_rate(pred_vis)
-                    ba = binary_accuracy(pred_vis, tgt)
                 print(f"[ZXing @ step {i + 1}] {sr:.4f}")
-                print(f"BinaryAcc={ba:.4f}")
                 step_logger.log(
                     epoch=epoch,
                     step=global_step,
                     loss=loss.item(),
                     lr=optimizer.param_groups[0]["lr"],
                     grad_norm=total_norm,
-                    zxing=sr,
-                    binary_acc=ba
+                    zxing=sr
                 )
 
         # ======================

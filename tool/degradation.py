@@ -72,20 +72,16 @@ def add_waterdrop(img, severity="medium"):
         blur_sigma
     )
 
-    water_alpha = mask[..., None] * drop_strength
+    water_alpha = mask * drop_strength
     blur_alpha = water_alpha * blur_strength
-
     out = warped * (1 - blur_alpha) + blur * blur_alpha
 
     # specular highlight
-
     edge = cv2.Laplacian(
         mask,
         cv2.CV_32F
     )
-
     edge = np.abs(edge)
-
     edge = cv2.GaussianBlur(
         edge,
         (0, 0),
@@ -95,10 +91,7 @@ def add_waterdrop(img, severity="medium"):
     if edge.max() > 0:
         edge = edge / edge.max()
 
-    edge = edge[..., None]
-
     specular_alpha = edge * specular_strength
-
     out = out * (1 - specular_alpha) + 255 * specular_alpha
 
     # brightness fluctuation
@@ -175,7 +168,7 @@ def random_contrast(img):
 
 def add_highlight(img):
     if random.random() < 0.35:
-        h, w, _ = img.shape
+        h, w = img.shape
         img = img.astype(np.float32)
 
         overlay = np.zeros_like(
@@ -192,7 +185,7 @@ def add_highlight(img):
             overlay,
             (x, y),
             radius,
-            (255, 255, 255),
+            255,
             -1
         )
 
@@ -234,7 +227,36 @@ def jpeg_compress(img):
 
         img = cv2.imdecode(
             enc,
-            cv2.IMREAD_COLOR
+            cv2.IMREAD_GRAYSCALE
+        )
+
+    return img
+
+
+def random_perspective(img):
+    if random.random() < 0.5:
+        h, w = img.shape
+        offset = random.randint(4, 10)
+        pts1 = np.float32([
+            [0, 0],
+            [w - 1, 0],
+            [w - 1, h - 1],
+            [0, h - 1]
+        ])
+
+        pts2 = np.float32([
+            [random.randint(0, offset), random.randint(0, offset)],
+            [w - 1 - random.randint(0, offset), random.randint(0, offset)],
+            [w - 1 - random.randint(0, offset), h - 1 - random.randint(0, offset)],
+            [random.randint(0, offset), h - 1 - random.randint(0, offset)]
+        ])
+        M = cv2.getPerspectiveTransform(pts1, pts2)
+        img = cv2.warpPerspective(
+            img,
+            M,
+            (w, h),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_REPLICATE
         )
 
     return img
@@ -243,16 +265,14 @@ def jpeg_compress(img):
 def degrade_qr(img):
     img = img.copy().astype(np.float32)
 
+    img = random_perspective(img.astype(np.uint8))
+
     # severity sampling
-
     p = random.random()
-
     if p < 0.2:
         severity = "light"
-
     elif p < 0.75:
         severity = "medium"
-
     else:
         severity = "heavy"
 
@@ -260,15 +280,14 @@ def degrade_qr(img):
         img.astype(np.uint8),
         severity
     )
-
     img = img.astype(np.float32)
 
+    img = add_highlight(img)
     img = random_blur(img)
+    img = jpeg_compress(img)
     img = random_noise(img)
     img = random_brightness(img)
     img = random_contrast(img)
-    img = add_highlight(img)
-    img = jpeg_compress(img)
 
     return np.clip(
         img,

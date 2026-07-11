@@ -8,6 +8,7 @@ from tool.train_logger import *
 from tool.checkpoints import *
 from tool.validator import *
 from tool.ema import *
+from tool.visualizer import *
 
 
 def finetune():
@@ -19,8 +20,8 @@ def finetune():
     # Model
     # ======================
     model = Restormer(
-        inp_channels=3,
-        out_channels=3,
+        inp_channels=1,
+        out_channels=1,
         dim=24,
         num_blocks=[2, 2, 2, 3],
         num_refinement_blocks=1,
@@ -69,6 +70,7 @@ def finetune():
     min_epochs = 5
     min_delta_loss = 0.001
     min_delta_zxing = 0.001
+    early_stop_zxing = 0.96
 
     early_stop_counter = 0
 
@@ -111,11 +113,8 @@ def finetune():
 
             with autocast(device_type="cuda"):
                 pred = model(inp)
-
-                loss = compute_loss(
-                    pred,
-                    tgt
-                )
+                pred = pred.clamp(0, 1)
+                loss = compute_loss(pred, tgt, mode="finetune")
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
             grad_norm = torch.nn.utils.clip_grad_norm_(
@@ -177,6 +176,14 @@ def finetune():
         print(f"Validation Binary Accuracy: {val_metrics['binary_acc']:.4f}")
         print("======================\n")
         scheduler.step(val_metrics["loss"])
+        save_visual_results(
+            model=ema.ema,
+            loader=val_loader,
+            device=device,
+            epoch=epoch,
+            save_dir="visual/finetune",
+            indices=(0, 10, 20, 50)
+        )
         # ======================
         # checkpoint
         # ======================
@@ -270,34 +277,26 @@ def finetune():
         # ======================
         # Early Stopping
         # ======================
-        if zxing_improved:
+        if best_metrics["zxing"] < early_stop_zxing:
             early_stop_counter = 0
+            print(
+                f"EarlyStopping Disabled "
+                f"(Best ZXing={best_metrics['zxing']:.4f})"
+            )
         else:
-            early_stop_counter += 1
-        print(
-            f"EarlyStopping: "
-            f"{early_stop_counter}/{patience}"
-        )
-
-        if (
-                epoch + 1 >= min_epochs
-                and
-                early_stop_counter >= patience
-        ):
-            print("\n======================")
-            print("Early Stopping")
-            print("======================")
-            print(
-                f"Best ZXing : "
-                f"{best_metrics['zxing']:.4f}"
-            )
-            print(
-                f"Best Loss : "
-                f"{best_metrics['loss']:.6f}"
-            )
-            break
-
-    print("Training finished")
+            if loss_improved or zxing_improved:
+                early_stop_counter = 0
+            else:
+                early_stop_counter += 1
+            print(f"EarlyStopping: {early_stop_counter}/{patience}")
+            if epoch + 1 >= min_epochs and early_stop_counter >= patience:
+                print("\n==============================")
+                print("Early Stopping Triggered")
+                print("==============================")
+                print(f"Best ZXing : {best_metrics['zxing']:.4f}")
+                print(f"Best Loss  : {best_metrics['loss']:.6f}")
+                break
+    print("train finished")
 
 
 if __name__ == "__main__":

@@ -11,9 +11,8 @@ def zxing_rate(batch_tensor):
     imgs = batch_tensor.detach().cpu()
 
     for i in range(total):
-        img = imgs[i]
-        img = img.permute(1, 2, 0).numpy()
-        img = (img * 255).clip(0, 255).astype("uint8")
+        img = imgs[i, 0].numpy()
+        img = (img*255).clip(0,255).astype("uint8")
         result = zxingcpp.read_barcodes(img)
         if len(result) > 0:
             success += 1
@@ -30,25 +29,13 @@ def calculate_psnr(pred, gt):
 
 
 def binary_accuracy(pred, gt):
-    pred_gray = (
-            0.299 * pred[:, 0:1] +
-            0.587 * pred[:, 1:2] +
-            0.114 * pred[:, 2:3]
-    )
-    gt_gray = (
-            0.299 * gt[:, 0:1] +
-            0.587 * gt[:, 1:2] +
-            0.114 * gt[:, 2:3]
-    )
+    pred_bin = (pred > 0.5)
+    gt_bin = (gt > 0.5)
 
-    pred_bin = (pred_gray > 0.5)
-    gt_bin = (gt_gray > 0.5)
-    acc = (pred_bin == gt_bin).float().mean()
-
-    return acc.item()
+    return (pred_bin == gt_bin).float().mean().item()
 
 
-def validate(model, loader, device, mode="pretrain"):
+def validate(model, loader, device, mode="finetune"):
     model.eval()
 
     total_loss = 0
@@ -76,8 +63,7 @@ def validate(model, loader, device, mode="pretrain"):
             success = 0
             imgs = pred.cpu()
             for i in range(imgs.shape[0]):
-                img = imgs[i]
-                img = img.permute(1, 2, 0).numpy()
+                img = imgs[i, 0].numpy()
                 img = (img * 255).clip(0, 255).astype("uint8")
                 result = zxingcpp.read_barcodes(img)
                 if len(result) > 0:

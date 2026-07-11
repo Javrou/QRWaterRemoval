@@ -55,21 +55,13 @@ class MixedQRDataset(Dataset):
     def __len__(self):
         return self.length
 
-    def read_img(self,path):
-        img = cv2.imread(
-            str(path)
-        )
-        img = cv2.cvtColor(
-            img,
-            cv2.COLOR_BGR2RGB
-        )
-
+    def read_img(self, path):
+        img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
         return img
 
-    def preprocess(self,img):
+    def preprocess(self, img):
         img = img.astype("float32") / 255.
-        img = torch.from_numpy(img).permute(2,0,1)
-
+        img = torch.from_numpy(img).unsqueeze(0)
         return img
 
     def __getitem__(self,index):

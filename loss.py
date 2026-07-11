@@ -4,54 +4,23 @@ import torch.nn.functional as F
 from pytorch_msssim import SSIM
 
 l1_loss = nn.L1Loss()
-ssim_loss = SSIM(data_range=1.0, size_average=True, channel=3)
+ssim_loss = SSIM(data_range=1.0, size_average=True, channel=1)
 
 
 # ======================
 # Binary Loss
 # ======================
 def binary_loss(pred, gt):
-
     with torch.amp.autocast(device_type="cuda", enabled=False):
 
         pred = pred.float()
         gt = gt.float()
-        pred_gray = (
-            0.299*pred[:,0:1]
-            +
-            0.587*pred[:,1:2]
-            +
-            0.114*pred[:,2:3]
-        )
-
-
-        gt_gray = (
-            0.299*gt[:,0:1]
-            +
-            0.587*gt[:,1:2]
-            +
-            0.114*gt[:,2:3]
-        )
-
-
-        pred_gray = torch.clamp(
-            pred_gray,
-            1e-6,
-            1-1e-6
-        )
-
+        pred_gray = torch.clamp(pred, 1e-6, 1-1e-6)
 
         return F.binary_cross_entropy(
             pred_gray,
-            gt_gray
+            gt
         )
-
-
-# ======================
-# RGB -> Gray
-# ======================
-def rgb2gray(x):
-    return 0.299 * x[:, 0:1] + 0.587 * x[:, 1:2] + 0.114 * x[:, 2:3]
 
 
 # ======================
@@ -74,27 +43,21 @@ def edge_loss(pred, gt):
     ).view(1, 1, 3, 3)
 
     def edge(img):
-        gray = (
-                0.299 * img[:, 0:1]
-                +
-                0.587 * img[:, 1:2]
-                +
-                0.114 * img[:, 2:3]
-        )
-
         gx = F.conv2d(
-            gray,
+            img,
             sobel_x,
             padding=1
         )
-
         gy = F.conv2d(
-            gray,
+            img,
             sobel_y,
             padding=1
         )
-
-        return torch.sqrt(gx ** 2 + gy ** 2 + 1e-6)
+        return torch.sqrt(
+            gx ** 2 +
+            gy ** 2 +
+            1e-6
+        )
 
     return F.l1_loss(edge(pred), edge(gt))
 
@@ -114,25 +77,25 @@ def zxing_proxy_loss(pred, tau=0.1):
 # ======================
 # Total Loss
 # ======================
-def compute_loss(pred, gt, mode="pretrain"):
+def compute_loss(pred, gt, mode="finetune"):
     l1 = l1_loss(pred, gt)
     ssim = ssim_loss(pred, gt)
 
     if mode == "pretrain":
         loss = (
             1.0 * l1 +
-            0.10 * ssim +
-            0.25 * edge_loss(pred, gt) +
-            0.10 * binary_loss(pred, gt) +
-            0.08 * zxing_proxy_loss(pred)
+            0.05 * ssim +
+            0.30 * edge_loss(pred, gt) +
+            0.25 * binary_loss(pred, gt) +
+            0.10 * zxing_proxy_loss(pred)
         )
     elif mode == "finetune":
         loss = (
-            1.0 * l1 +
-            0.08 * ssim +
-            0.30 * edge_loss(pred, gt) +
-            0.08 * binary_loss(pred, gt) +
-            0.13 * zxing_proxy_loss(pred)
+            0.8 * l1 +
+            0.05 * ssim +
+            0.35 * edge_loss(pred, gt) +
+            0.30 * binary_loss(pred, gt) +
+            0.15 * zxing_proxy_loss(pred)
         )
 
     return loss
