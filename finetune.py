@@ -34,20 +34,33 @@ def finetune():
         f"Parameters: "
         f"{sum(p.numel() for p in model.parameters()) / 1e6:.2f} M"
     )
-    ema = ModelEMA(model, decay=0.999)
+    pretrained_path = "checkpoints/best_zxing.pth"
+    if pretrained_path is not None:
+        _, _, metrics = load_checkpoint(
+            path=pretrained_path,
+            model=model,
+            device=device
+        )
 
-    num_epochs = 40
+        print("=" * 40)
+        print("Load Pretrained")
+        print(pretrained_path)
+        print("Before Finetune:", metrics)
+        print("=" * 40)
+    ema = ModelEMA(model, decay=0.9995)
+
+    num_epochs = 30
     resume = False
     resume_path = "checkpoints/real_latest.pth"
 
     optimizer = optim.AdamW(
         model.parameters(),
-        lr=8e-5,
+        lr=3e-5,
         weight_decay=1e-4
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
-        mode='min',
+        mode='max',
         factor=0.5,
         patience=3,
         threshold=1e-3,
@@ -55,9 +68,6 @@ def finetune():
     )
     scaler = GradScaler("cuda")
 
-    # ======================
-    # Training
-    # ======================
     step_logger = StepLogger("logs/finetune/train_step.csv")
     epoch_logger = EpochLogger("logs/finetune/epoch_metrics.csv")
     best_metrics = {
@@ -113,13 +123,13 @@ def finetune():
 
             with autocast(device_type="cuda"):
                 pred = model(inp)
-                pred = pred.clamp(0, 1)
-                loss = compute_loss(pred, tgt, mode="finetune")
+                pred_loss = pred.clamp(0,1)
+                loss = compute_loss(pred_loss, tgt, mode="finetune")
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
             grad_norm = torch.nn.utils.clip_grad_norm_(
                 model.parameters(),
-                4
+                2
             ).item()
             scaler.step(optimizer)
             scaler.update()
@@ -147,7 +157,7 @@ def finetune():
                 )
             if (i + 1) % 100 == 0:
                 with torch.no_grad():
-                    pred_vis = pred.clamp(0, 1)
+                    pred_vis = pred.detach().clamp(0, 1)
                     sr = zxing_rate(pred_vis)
                 print(f"[ZXing @ step {i + 1}] {sr:.4f}")
                 step_logger.log(
@@ -175,7 +185,7 @@ def finetune():
         print(f"Validation SSIM: {val_metrics['ssim']:.4f}")
         print(f"Validation Binary Accuracy: {val_metrics['binary_acc']:.4f}")
         print("======================\n")
-        scheduler.step(val_metrics["loss"])
+        scheduler.step(val_metrics["zxing"])
         save_visual_results(
             model=ema.ema,
             loader=val_loader,
