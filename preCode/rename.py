@@ -4,7 +4,7 @@
 import os
 import re
 
-dir_path = r"real_data/raw_target"
+dir_path = r"../new_real_data/target"
 
 # 只取 jpg/png
 files = [f for f in os.listdir(dir_path) if f.lower().endswith(('.jpg', '.png'))]
