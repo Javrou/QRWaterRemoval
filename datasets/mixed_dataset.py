@@ -16,7 +16,6 @@ class MixedQRDataset(BaseQRDataset):
     ):
 
         super().__init__(gray)
-
         self.synthetic_ratio = synthetic_ratio
 
         real_root = Path(real_root)
