@@ -3,9 +3,9 @@
 
 class PretrainConfig(BaseExperimentConfig):
     # ========= Dataset =========
-    train_root = "synthetic_dataset/train"
-    val_root = "synthetic_dataset/val"
-    test_root = "synthetic_dataset/test"
+    train_root = "data/synthetic_dataset/train"
+    val_root = "data/synthetic_dataset/val"
+    test_root = "data/synthetic_dataset/test"
     batch_size = 32
 
     # ========= Model =========

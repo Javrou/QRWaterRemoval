@@ -3,10 +3,10 @@
 
 class FinetuneConfig(BaseExperimentConfig):
     # ========= Dataset =========
-    train_root = "real_dataset/train"
-    val_root = "real_dataset/val"
-    test_root = "real_dataset/test"
-    synthetic_root = "synthetic_dataset"
+    train_root = "data/real_dataset/train"
+    val_root = "data/real_dataset/val"
+    test_root = "data/real_dataset/test"
+    synthetic_root = "data/synthetic_dataset"
     synthetic_ratio = 0.2
     batch_size = 16
 
