@@ -1,8 +1,5 @@
 # dataset
-*datasets/
-*dataset/
-*data/
-real_test/
+/data/
 
 *.zip
 *.7z
