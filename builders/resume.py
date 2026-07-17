@@ -1,4 +1,5 @@
-﻿import torch
+﻿import os
+import torch
 
 from engine.checkpoint import load_checkpoint
 
@@ -17,6 +18,10 @@ def resume_training(cfg, model, optimizer, scheduler, scaler, ema, device):
     }
 
     if not cfg.resume:
+        return start_epoch, global_step, best_metrics
+
+    # 文件不存在时优雅跳过（首次运行）
+    if not os.path.exists(cfg.resume_path):
         return start_epoch, global_step, best_metrics
 
     start_epoch, global_step, metrics = load_checkpoint(
@@ -71,7 +76,7 @@ def load_model(path, model, ema=None, device="cuda", label="Model"):
 
 
 def load_pretrained(cfg, model, ema=None, device="cuda"):
-    if cfg.resume or cfg.pretrained is None:
+    if cfg.pretrained is None:
         return
     load_model(cfg.pretrained, model, ema=ema, device=device,
                label="Pretrained Model")
