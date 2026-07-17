@@ -1,48 +1,22 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from pytorch_msssim import SSIM
+from pytorch_msssim import ssim
+
 
 # ======================
 # Basic Loss
 # ======================
-l1_loss = nn.L1Loss()
-ssim_loss = SSIM(data_range=1.0, size_average=True, channel=1)
+def l1_loss(pred, target):
+    return F.l1_loss(pred, target)
 
 
-# ======================
-# ROI L1
-# ======================
-def build_roi_mask(gt):
-    return (gt < 0.95).float()
-
-
-def roi_l1_loss(pred, gt):
-    mask = build_roi_mask(gt)
-    diff = torch.abs(pred - gt)
-    loss = (diff * mask).sum()
-    loss /= (mask.sum() + 1e-6)
-
-    return loss
-
-
-# ======================
-# Binary Loss
-# ======================
-def binary_loss(pred, gt):
-    with torch.amp.autocast(device_type="cuda", enabled=False):
-        pred = pred.float()
-        gt = gt.float()
-
-        pred_bin = torch.sigmoid(
-            pred * 10
-        )
-        gt_bin = (gt > 0.5).float()
-
-        return F.binary_cross_entropy(
-            pred_bin,
-            gt_bin
-        )
+def ssim_loss(pred, target):
+    return 1 - ssim(
+        pred,
+        target,
+        data_range=1.0,
+        size_average=True
+    )
 
 
 # ======================
@@ -75,6 +49,41 @@ def edge_loss(pred, gt):
     gt_edge = torch.sqrt(gt_x ** 2 + gt_y ** 2 + 1e-6)
 
     return F.l1_loss(pred_edge, gt_edge)
+
+
+# ======================
+# Binary Loss
+# ======================
+def binary_loss(pred, gt):
+    with torch.amp.autocast(device_type="cuda", enabled=False):
+        pred = pred.float()
+        gt = gt.float()
+
+        pred_bin = torch.sigmoid(
+            pred * 10
+        )
+        gt_bin = (gt > 0.5).float()
+
+        return F.binary_cross_entropy(
+            pred_bin,
+            gt_bin
+        )
+
+
+# ======================
+# ROI L1
+# ======================
+def build_roi_mask(gt):
+    return (gt < 0.95).float()
+
+
+def roi_l1_loss(pred, gt):
+    mask = build_roi_mask(gt)
+    diff = torch.abs(pred - gt)
+    loss = (diff * mask).sum()
+    loss /= (mask.sum() + 1e-6)
+
+    return loss
 
 
 # ======================

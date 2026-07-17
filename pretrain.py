@@ -4,6 +4,7 @@ import numpy as np
 import torch.optim as optim
 from torch.amp import autocast, GradScaler
 
+from train.trainer import Trainer
 from model.restormer import Restormer
 from tool.pretrain_data_loader import *
 from tool.train_logger import *
@@ -40,7 +41,19 @@ def pretrain():
     num_epochs = 30
     # 断点续训
     resume = True
-    resume_path = "checkpoints/latest.pth"
+    resume_path = "../checkpoints/latest.pth"
+    step_logger = StepLogger("../logs/pretrain/train_step.csv")
+    epoch_logger = EpochLogger("../logs/pretrain/epoch_metrics.csv")
+    patience = 6  # 连续6个epoch无提升
+    min_delta_loss = 1e-3  # loss至少下降0.001
+    min_delta_zxing = 0.002  # ZXing至少提升0.2%
+    min_epochs = 15
+
+    early_stop_zxing = 0.90
+    early_stop_counter = 0
+
+    start_epoch = 0
+    global_step = 0
 
     # optimizer with AMP
     optimizer = optim.AdamW(
@@ -56,11 +69,18 @@ def pretrain():
     )
     scaler = GradScaler("cuda")
 
-    # ======================
-    # Training
-    # ======================
-    step_logger = StepLogger("logs/pretrain/train_step.csv")
-    epoch_logger = EpochLogger("logs/pretrain/epoch_metrics.csv")
+    trainer = Trainer(
+        model=model,
+        optimizer=optimizer,
+        scaler=scaler,
+        loss_fn=compute_loss,
+        device=device,
+        step_logger=step_logger,
+        ema=None,
+        grad_clip=1e9,
+        print_freq=50,
+        zxing_freq=100
+    )
 
     best_metrics = {
         "loss": float("inf"),
@@ -69,16 +89,6 @@ def pretrain():
         "ssim": 0.0,
     }
 
-    patience = 6  # 连续6个epoch无提升
-    min_delta_loss = 1e-3  # loss至少下降0.001
-    min_delta_zxing = 0.002  # ZXing至少提升0.2%
-    min_epochs = 15
-
-    early_stop_zxing = 0.90
-    early_stop_counter = 0
-
-    start_epoch = 0
-    global_step = 0
     if resume:
         start_epoch, global_step, ckpt_metrics = load_checkpoint(
             path=resume_path,
@@ -106,64 +116,19 @@ def pretrain():
         running_loss = 0.0
         t_epoch = time.time()
 
-        for i, (inp, tgt) in enumerate(train_loader):
-            t0 = time.time()
-
-            inp = inp.to(device, non_blocking=True)
-            tgt = tgt.to(device, non_blocking=True)
-
-            optimizer.zero_grad(set_to_none=True)
-
-            # forward
-            with autocast(device_type="cuda"):
-                pred = model(inp)
-                loss = compute_loss(pred, tgt, mode="pretrain")
-
-            # backward
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1e9).item()
-
-            scaler.step(optimizer)
-            scaler.update()
-
-            running_loss += loss.item()
-            global_step += 1
-
-            dt = time.time() - t0
-
-            # log
-            if (i + 1) % 50 == 0:
-                print(
-                    f"[E{epoch} {i + 1}/{len(train_loader)}] "
-                    f"loss={loss.item():.4f} "
-                    f"time={dt:.3f}s "
-                    f"lr={optimizer.param_groups[0]['lr']:.2e} "
-                    f"grad_norm={total_norm:.2f}"
-                )
-                step_logger.log(
-                    epoch=epoch,
-                    step=global_step,
-                    loss=loss.item(),
-                    lr=optimizer.param_groups[0]["lr"],
-                    grad_norm=total_norm,
-                    zxing=None
-                )
-
-            # zxing eval
-            if (i + 1) % 100 == 0:
-                with torch.no_grad():
-                    pred_vis = pred.clamp(0, 1)
-                    sr = zxing_rate(pred_vis)
-                print(f"[ZXing @ step {i + 1}] {sr:.4f}")
-                step_logger.log(
-                    epoch=epoch,
-                    step=global_step,
-                    loss=loss.item(),
-                    lr=optimizer.param_groups[0]["lr"],
-                    grad_norm=total_norm,
-                    zxing=sr
-                )
+        train_metrics = trainer.train_one_epoch(
+            train_loader=train_loader,
+            epoch=epoch,
+            global_step=global_step,
+            mode="pretrain",
+            zxing_fn=zxing_rate()
+        )
+        avg_loss = train_metrics["loss"]
+        global_step = train_metrics["global_step"]
+        print()
+        print("Epoch finished")
+        print("Epoch time:", train_metrics["time"])
+        print("Avg Loss:", avg_loss)
 
         # ======================
         # Epoch summary
@@ -218,7 +183,7 @@ def pretrain():
         }
         # ---------- latest ----------
         save_checkpoint(
-            path="checkpoints/latest.pth",
+            path="../checkpoints/latest.pth",
             model=model,
             optimizer=optimizer,
             scheduler=scheduler,
@@ -230,7 +195,7 @@ def pretrain():
         # ---------- best loss ----------
         if is_best_loss:
             save_checkpoint(
-                path="checkpoints/best_loss.pth",
+                path="../checkpoints/best_loss.pth",
                 model=model,
                 optimizer=optimizer,
                 scheduler=scheduler,
@@ -243,7 +208,7 @@ def pretrain():
         # ---------- best zxing ----------
         if is_best_zxing:
             save_checkpoint(
-                path="checkpoints/best_zxing.pth",
+                path="../checkpoints/best_zxing.pth",
                 model=model,
                 optimizer=optimizer,
                 scheduler=scheduler,

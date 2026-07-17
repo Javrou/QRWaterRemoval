@@ -34,7 +34,7 @@ def finetune():
         f"Parameters: "
         f"{sum(p.numel() for p in model.parameters()) / 1e6:.2f} M"
     )
-    pretrained_path = "checkpoints/best_zxing.pth"
+    pretrained_path = "../checkpoints/best_zxing.pth"
     if pretrained_path is not None:
         _, _, metrics = load_checkpoint(
             path=pretrained_path,
@@ -55,7 +55,7 @@ def finetune():
 
     optimizer = optim.AdamW(
         model.parameters(),
-        lr=3e-5,
+        lr=2e-5,
         weight_decay=1e-4
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -68,8 +68,8 @@ def finetune():
     )
     scaler = GradScaler("cuda")
 
-    step_logger = StepLogger("logs/finetune/train_step.csv")
-    epoch_logger = EpochLogger("logs/finetune/epoch_metrics.csv")
+    step_logger = StepLogger("../logs/finetune/train_step.csv")
+    epoch_logger = EpochLogger("../logs/finetune/epoch_metrics.csv")
     best_metrics = {
         "loss": float("inf"),
         "zxing": 0.0,
