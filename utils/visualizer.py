@@ -1,88 +1,57 @@
-import os
 import cv2
 import numpy as np
-import torch
+from pathlib import Path
 
 
-def tensor2img(x):
-    x = x.detach().cpu().clamp(0, 1)
-    x = x[0].numpy()
-    x = (x*225).astype(np.uint8)
-    return x
+class Visualizer:
+    def __init__(self, save_dir):
 
+        self.save_dir = Path(save_dir)
+        self.save_dir.mkdir(parents=True, exist_ok=True)
 
-def save_visual_results(
-        model,
-        loader,
-        device,
-        epoch,
-        save_dir="visual",
-        indices=(0, 10, 20, 50)
-):
-    model.eval()
+    @staticmethod
+    def to_uint8(img):
 
-    epoch_dir = os.path.join(save_dir, f"epoch_{epoch:03d}")
-    os.makedirs(epoch_dir, exist_ok=True)
+        if hasattr(img, "detach"):
+            img = img.detach().cpu().numpy()
+        img = np.squeeze(img)
+        img = np.clip(img, 0, 1)
 
-    with torch.no_grad():
-        sample_id = 0
-        for inp, tgt in loader:
+        return (img * 255).astype(np.uint8)
 
-            inp = inp.to(device)
-            pred = model(inp).clamp(0, 1)
+    def save_compare(
+            self,
+            inp,
+            pred,
+            target,
+            name
+    ):
+        inp = self.to_uint8(inp)
+        pred = self.to_uint8(pred)
+        target = self.to_uint8(target)
 
-            bs = inp.size(0)
+        canvas = np.concatenate(
+            [inp, pred, target],
+            axis=1
+        )
 
-            for b in range(bs):
+        cv2.imwrite(
+            str(self.save_dir / name),
+            canvas
+        )
 
-                if sample_id in indices:
-                    input_img = tensor2img(inp[b])
-                    pred_img = tensor2img(pred[b])
-                    target_img = tensor2img(tgt[b])
+    def save_batch(
+            self,
+            inputs,
+            preds,
+            targets,
+            prefix="epoch"
+    ):
 
-                    result = np.concatenate(
-                        [
-                            input_img,
-                            pred_img,
-                            target_img
-                        ],
-                        axis=1
-                    )
-                    result = cv2.cvtColor(result, cv2.COLOR_GRAY2BGR)
-
-                    cv2.putText(
-                        result,
-                        "Input",
-                        (20, 25),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (0, 255, 0),
-                        2
-                    )
-
-                    cv2.putText(
-                        result,
-                        "Prediction",
-                        (280, 25),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (0, 255, 0),
-                        2
-                    )
-
-                    cv2.putText(
-                        result,
-                        "Target",
-                        (560, 25),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (0, 255, 0),
-                        2
-                    )
-
-                    cv2.imwrite(
-                        os.path.join(epoch_dir, f"sample_{sample_id:04d}.png"),
-                        result
-                    )
-
-                sample_id += 1
+        for i in range(len(inputs)):
+            self.save_compare(
+                inputs[i],
+                preds[i],
+                targets[i],
+                f"{prefix}_{i:03d}.png"
+            )
