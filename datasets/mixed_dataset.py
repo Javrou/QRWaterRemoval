@@ -25,7 +25,7 @@ class MixedQRDataset(BaseQRDataset):
         self.real_files = sorted(self.real_target.glob("*.png"))
 
         synthetic_root = Path(synthetic_root)
-        self.synthetic_target = synthetic_root / "target"
+        self.synthetic_target = synthetic_root / "train" / "target"
         self.synthetic_files = sorted(self.synthetic_target.glob("*.png"))
 
         self.length = len(self.real_files) + int(
