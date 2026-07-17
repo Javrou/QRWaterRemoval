@@ -6,7 +6,7 @@ import random
 import numpy as np
 from pathlib import Path
 
-from tool.degradation import degrade_qr
+from utils.degradation import degrade_qr
 
 
 def generate_degraded_dataset(src_dir, save_dir, seed=42):
@@ -73,15 +73,15 @@ if __name__ == "__main__":
     # validation
 
     generate_degraded_dataset(
-        "../synthetic_dataset/val/target",
-        "raw_data/synthetic/val",
+        "../data/synthetic_dataset/val/target",
+        "../data/raw_data/val",
         seed=100
     )
 
     # test
 
     generate_degraded_dataset(
-        "../synthetic_dataset/test/target",
-        "raw_data/synthetic/test",
+        "../data/synthetic_dataset/test/target",
+        "../data/raw_data/test",
         seed=200
     )

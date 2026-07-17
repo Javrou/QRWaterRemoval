@@ -15,9 +15,9 @@ from qrcode.constants import (
     ERROR_CORRECT_H
 )
 
-SAVE_DIR = "../synthetic_dataset/train/target"
+SAVE_DIR = "../data/synthetic_dataset/train/target"
 
-CSV_PATH = "../synthetic_dataset/train.csv"
+CSV_PATH = "../data/synthetic_dataset/train.csv"
 
 NUM_IMAGES = 15000
 SIZE = 256

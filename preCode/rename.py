@@ -1,41 +1,53 @@
-"""
-数据集重命名
-"""
 import os
-import re
 
-dir_path = r"../new_real_data/target"
+# 数据集路径
+root_dir = r"../new_division_data"
+input_dir = os.path.join(root_dir, "input")
+target_dir = os.path.join(root_dir, "target")
 
-# 只取 jpg/png
-files = [f for f in os.listdir(dir_path) if f.lower().endswith(('.jpg', '.png'))]
+# 支持的图片格式
+IMG_EXTS = {".png", ".jpg"}
 
-files.sort()
+# 获取两个文件夹中的文件
+input_files = {
+    f for f in os.listdir(input_dir)
+    if os.path.splitext(f)[1].lower() in IMG_EXTS
+}
 
-print(f"找到 {len(files)} 张图片")
+target_files = {
+    f for f in os.listdir(target_dir)
+    if os.path.splitext(f)[1].lower() in IMG_EXTS
+}
 
+# 只保留两边都有的文件
+common_files = sorted(input_files & target_files)
 
-def extract_time(name):
-    # IMG_20260706_102302
-    m = re.search(r'IMG_(\d{8})_(\d{6})', name)
-    if m:
-        return m.group(1) + m.group(2)
-    return name
+print(f"找到 {len(common_files)} 对图片")
 
+temp_pairs = []
 
-files.sort(key=extract_time)
+for idx, filename in enumerate(common_files):
+    ext = os.path.splitext(filename)[1].lower()
 
-start_index = 1
+    input_old = os.path.join(input_dir, filename)
+    target_old = os.path.join(target_dir, filename)
 
-for i, fname in enumerate(files, start=start_index):
-    ext = os.path.splitext(fname)[1]
+    input_tmp = os.path.join(input_dir, f"__tmp__{idx}{ext}")
+    target_tmp = os.path.join(target_dir, f"__tmp__{idx}{ext}")
 
-    new_name = f"{i:04d}{ext}"
+    os.rename(input_old, input_tmp)
+    os.rename(target_old, target_tmp)
 
-    old_path = os.path.join(dir_path, fname)
-    new_path = os.path.join(dir_path, new_name)
+    temp_pairs.append((input_tmp, target_tmp, ext))
 
-    os.rename(old_path, new_path)
+for idx, (input_tmp, target_tmp, ext) in enumerate(temp_pairs, start=1):
+    new_name = f"{idx:04d}{ext}"
 
-    print(f"{fname}  ->  {new_name}")
+    input_new = os.path.join(input_dir, new_name)
+    target_new = os.path.join(target_dir, new_name)
 
-print("重命名完成")
+    os.rename(input_tmp, input_new)
+    os.rename(target_tmp, target_new)
+
+print("重命名完成！")
+print(f"共处理 {len(temp_pairs)} 对图片")
