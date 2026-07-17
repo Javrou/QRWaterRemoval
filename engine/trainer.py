@@ -1,5 +1,4 @@
 import torch
-from torch.amp import autocast
 
 
 class Trainer:
@@ -33,7 +32,7 @@ class Trainer:
 
         self.optimizer.zero_grad(set_to_none=True)
 
-        with autocast(device_type="cuda"):
+        with torch.amp.autocast("cuda"):
 
             pred = self.model(inp)
 

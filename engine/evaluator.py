@@ -1,7 +1,6 @@
 import torch
 
 from tqdm import tqdm
-from torch.cuda.amp import autocast
 
 from loss import compute_loss
 from engine.metrics import evaluate_metrics
@@ -47,7 +46,7 @@ class Evaluator:
                 inp = inp.to(self.device, non_blocking=True)
                 tgt = tgt.to(self.device, non_blocking=True)
 
-                with autocast(device_type="cuda"):
+                with torch.amp.autocast("cuda"):
 
                     pred = self.model(inp).clamp(0, 1)
                     loss = compute_loss(pred, tgt, mode)
