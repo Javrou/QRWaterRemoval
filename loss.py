@@ -55,7 +55,12 @@ def edge_loss(pred, gt):
 # ROI L1 — 受损区域加权 L1
 # ======================
 def build_roi_mask(gt):
-    return (gt < 0.8).float()
+    dark = (gt < 0.8).float()
+    edge = torch.abs(F.avg_pool2d(gt, 3, 1, 1)-gt)
+
+    mask = dark + edge
+
+    return torch.clamp(mask, 0, 1)
 
 
 def roi_l1_loss(pred, gt):
@@ -70,7 +75,7 @@ def roi_l1_loss(pred, gt):
 # ======================
 # ZXing Proxy Loss
 # ======================
-def zxing_proxy_loss(pred, tau=0.1):
+def zxing_proxy_loss(pred, tau=0.15):
     """将 ZXing 解码器的硬阈值行为用可微的 sigmoid 近似。
     - loss_soft: 软二值化结果 (≈0/1) 与原始预测之间的 L1，
       推动输出远离中间灰度
@@ -89,18 +94,47 @@ def zxing_proxy_loss(pred, tau=0.1):
 
 
 # ======================
-# Binary Loss
+# Binary Loss (BCE)
 # ======================
 def binary_loss(pred, gt):
-
     with torch.amp.autocast(device_type="cuda", enabled=False):
         pred = pred.float()
         gt = gt.float()
 
-        pred = pred.clamp(1e-6, 1-1e-6)
+        pred = pred.clamp(1e-6, 1 - 1e-6)
         gt_bin = (gt > 0.5).float()
 
-        return F.binary_cross_entropy(pred,gt_bin)
+        return F.binary_cross_entropy(pred, gt_bin)
+
+
+# ======================
+# Binary Loss (Weighted BCE)
+# ======================
+def weighted_binary_loss(pred, gt):
+    with torch.amp.autocast(device_type="cuda", enabled=False):
+        pred = pred.float()
+        gt = gt.float()
+
+        pred = pred.clamp(1e-6, 1 - 1e-6)
+        gt_bin = (gt > 0.5).float()
+
+        pos = gt_bin.sum()
+        neg = gt_bin.numel() - pos
+
+        pos_weight = neg / (pos + 1e-6)
+        weight = torch.where(
+            gt_bin == 1,
+            pos_weight,
+            torch.ones_like(gt_bin)
+        )
+
+        loss = F.binary_cross_entropy(
+            pred,
+            gt_bin,
+            weight=weight
+        )
+
+        return loss
 
 
 # ======================
@@ -128,15 +162,14 @@ def fft_loss(pred, target):
 # ======================
 # Soft Dice Loss
 # ======================
-def soft_dice_loss(pred, target, smooth=1.0):
-    pred = 1 - pred
-    target = 1 - target
+def soft_dice_loss(pred, target, smooth=1):
     pred = pred.reshape(-1)
     target = target.reshape(-1)
+
     intersection = (pred * target).sum()
     dice = (2 * intersection + smooth) / (pred.sum() + target.sum() + smooth)
 
-    return 1-dice
+    return 1 - dice
 
 
 # ======================
@@ -155,29 +188,28 @@ def compute_loss(pred, gt, mode="pretrain"):
     roi = roi_l1_loss(pred, gt)
     edge = edge_loss(pred, gt)
     fft = fft_loss(pred, gt)
-    dice = soft_dice_loss(pred, gt)
+    # dice = soft_dice_loss(pred, gt)
     binary_v = binary_loss(pred, gt)
+    weighted_binary_v = weighted_binary_loss(pred, gt)
     zxing = zxing_proxy_loss(pred)
 
     if mode == "pretrain":
         return (
-            0.45 * l1
-            + 0.15 * ssim_v
-            + 0.20 * roi
-            + 0.10 * edge
-            + 0.10 * fft
-            + 0.10 * dice
-            + 0.05 * binary_v
-            + 0.05 * zxing
+                0.35 * l1
+                + 0.10 * ssim_v
+                + 0.20 * roi
+                + 0.10 * edge
+                + 0.10 * fft
+                + 0.10 * weighted_binary_v
+                + 0.15 * zxing
         )
-    else:   # finetune
+    else:  # finetune
         return (
-            0.45 * l1
-            + 0.15 * ssim_v
-            + 0.20 * roi
-            + 0.10 * edge
-            + 0.15 * fft
-            + 0.10 * dice
-            + 0.05 * binary_v
-            + 0.05 * zxing
+                0.45 * l1
+                + 0.15 * ssim_v
+                + 0.20 * roi
+                + 0.10 * edge
+                + 0.20 * fft
+                + 0.05 * binary_v
+                + 0.10 * zxing
         )
