@@ -1,5 +1,6 @@
 import math
-import torch.optim as optim
+
+from torch import optim
 from torch.amp import GradScaler
 
 
@@ -52,6 +53,13 @@ def build_optimizer(model, cfg):
             patience=cfg.lr_patience,
             threshold=1e-3,
             min_lr=cfg.min_lr
+        )
+    elif cfg.scheduler == "cosine_annealing_warmrestarts":
+        scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer,
+            T_0=cfg.T0,
+            T_mult=cfg.T_mult,
+            eta_min=cfg.min_lr
         )
     else:
         scheduler = None

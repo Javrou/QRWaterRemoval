@@ -1,4 +1,5 @@
 ﻿import os
+
 import torch
 
 from engine.checkpoint import load_checkpoint
@@ -20,7 +21,6 @@ def resume_training(cfg, model, optimizer, scheduler, scaler, ema, device):
     if not cfg.resume:
         return start_epoch, global_step, best_metrics
 
-    # 文件不存在时优雅跳过（首次运行）
     if not os.path.exists(cfg.resume_path):
         return start_epoch, global_step, best_metrics
 
@@ -69,10 +69,17 @@ def load_model(path, model, ema=None, device="cuda", label="Model"):
             strict=True
         )
 
-    print("=" * 40)
+    print("=" * 50)
     print("Loaded " + label)
-    print(path)
-    print("=" * 40)
+    print("  Path     :", path)
+    print("  Epoch    :", ckpt.get("epoch", "N/A"))
+    print("  Step     :", ckpt.get("step", "N/A"))
+    metrics = ckpt.get("metrics", {})
+    if metrics:
+        print("  Best Loss:", metrics.get("best_loss", "N/A"))
+        print("  Best ZXing:", metrics.get("best_zxing", "N/A"))
+        print("  Best PSNR :", metrics.get("best_psnr", "N/A"))
+    print("=" * 50)
 
 
 def load_pretrained(cfg, model, ema=None, device="cuda"):
