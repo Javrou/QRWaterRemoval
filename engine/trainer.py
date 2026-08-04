@@ -57,7 +57,7 @@ class Trainer:
             self.ema.update(self.model)
 
         return (
-            pred.detach(),
+            pred.detach().cpu(),
             loss.item(),
             grad_norm
         )

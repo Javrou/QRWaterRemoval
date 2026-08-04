@@ -1,9 +1,10 @@
-import torch
+import gc
 
+import torch
 from tqdm import tqdm
 
-from loss import compute_loss
 from engine.metrics import evaluate_metrics
+from loss import compute_loss
 from utils.visualizer import Visualizer
 
 
@@ -28,7 +29,8 @@ class Evaluator:
             loader,
             mode="pretrain",
             save_visual=False,
-            epoch=None
+            epoch=None,
+            vis_freq=1
     ):
 
         self.model.eval()
@@ -47,7 +49,6 @@ class Evaluator:
                 tgt = tgt.to(self.device, non_blocking=True)
 
                 with torch.amp.autocast("cuda"):
-
                     pred = self.model(inp).clamp(0, 1)
                     loss = compute_loss(pred, tgt, mode)
 
@@ -57,14 +58,19 @@ class Evaluator:
                 for k in metric_sum:
                     metric_sum[k] += metrics[k]
 
-                if save_visual and self.visualizer is not None and i == 0:
+                if save_visual and self.visualizer is not None and i == 0 and epoch is not None and epoch % vis_freq == 0:
 
                     self.visualizer.save_batch(
                         inp,
                         pred,
                         tgt,
-                        prefix=f"epoch{epoch}"
+                        epoch=epoch
                     )
+
+                del inp, tgt, pred
+
+        torch.cuda.empty_cache()
+        gc.collect()
 
         n = len(loader)
 

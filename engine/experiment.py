@@ -1,19 +1,17 @@
 import random
+
 import numpy as np
 import torch
 
 from builders.model import build_model
 from builders.optimizer import build_optimizer
+from builders.resume import load_model, load_pretrained, resume_training
 from builders.session import build_session
-from builders.resume import resume_training, load_model, load_pretrained
-
-from engine.trainer import Trainer
 from engine.evaluator import Evaluator
 from engine.train_loop import run_training
-
-from utils.ema import ModelEMA
-
+from engine.trainer import Trainer
 from loss import compute_loss
+from utils.ema import ModelEMA
 
 
 def seed_everything(seed):
@@ -49,12 +47,17 @@ def run_experiment(cfg_cls, build_loader_fn, mode, use_ema=False):
     )
 
     # ==========================================
-    # EMA & Pretrained (finetune only)
+    # EMA & Pretrained
     # ==========================================
     ema = None
     if use_ema:
         ema = ModelEMA(model, decay=cfg.ema_decay)
+
+    pretrained_epoch = 0
+    if not cfg.resume and getattr(cfg, "pretrained", None) is not None:
         load_pretrained(cfg, model, ema=ema, device=device)
+        ckpt = torch.load(cfg.pretrained, map_location=device, weights_only=False)
+        pretrained_epoch = ckpt.get("epoch", -1) + 1
 
     # ==========================================
     # Optimizer
@@ -76,7 +79,8 @@ def run_experiment(cfg_cls, build_loader_fn, mode, use_ema=False):
         scaler=scaler,
         loss_fn=loss_fn,
         device=device,
-        ema=ema
+        ema=ema,
+        grad_clip=cfg.grad_clip
     )
 
     # ==========================================
@@ -113,9 +117,15 @@ def run_experiment(cfg_cls, build_loader_fn, mode, use_ema=False):
         device=device
     )
 
-    session.state.epoch = start_epoch
+    session.state.epoch = max(start_epoch, pretrained_epoch)
     session.state.global_step = global_step
     session.best_metrics = best_metrics
+
+    # ==========================================
+    # Compile
+    # ==========================================
+    model = torch.compile(model, mode="default")
+    print("Model compiled (default)")
 
     # ==========================================
     # Training

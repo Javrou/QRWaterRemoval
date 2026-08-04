@@ -5,7 +5,7 @@ from datasets.base_dataset import BaseQRDataset
 
 class PairedQRDataset(BaseQRDataset):
 
-    def __init__(self, root, gray=True):
+    def __init__(self, root, gray=True, max_files=None):
 
         super().__init__(gray)
 
@@ -15,6 +15,9 @@ class PairedQRDataset(BaseQRDataset):
         self.target_dir = self.root / "target"
 
         self.files = sorted(self.target_dir.glob("*.png"))
+        if max_files is not None and len(self.files) > max_files:
+            step = max(1, len(self.files) // max_files)
+            self.files = self.files[::step][:max_files]
 
     def __len__(self):
         return len(self.files)

@@ -1,7 +1,8 @@
 import time
+
 import torch
 
-from utils.train_logger import StepLogger, EpochLogger
+from utils.train_logger import EpochLogger, StepLogger
 
 
 def run_training(
@@ -16,6 +17,7 @@ def run_training(
     state = session.state
 
     for epoch in range(state.epoch, cfg.epochs):
+        torch.cuda.empty_cache()
         t_epoch = time.time()
         running_loss = 0.0
 
@@ -75,9 +77,16 @@ def run_training(
         val_metrics = evaluator.evaluate(
             loader=val_loader,
             mode=mode,
-            save_visual=cfg.save_visual,
+            save_visual=cfg.save_visual and epoch % 2 == 0,
             epoch=epoch
         )
+        print(
+            "After Val:",
+            torch.cuda.memory_allocated() / 1024 ** 3,
+            torch.cuda.memory_reserved() / 1024 ** 3
+        )
+
+        torch.cuda.empty_cache()
         trainer.step_scheduler(val_metrics["loss"])
         EpochLogger.print(
             epoch=epoch,
@@ -89,6 +98,11 @@ def run_training(
             epoch=epoch,
             train_loss=train_loss,
             val_metrics=val_metrics
+        )
+        print(
+            "After Session:",
+            torch.cuda.memory_allocated() / 1024 ** 3,
+            torch.cuda.memory_reserved() / 1024 ** 3
         )
 
         if stop:

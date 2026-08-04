@@ -7,7 +7,7 @@ class FinetuneConfig(BaseExperimentConfig):
     val_root = "data/real_dataset/val"
     test_root = "data/real_dataset/test"
     synthetic_root = "data/synthetic_dataset"
-    synthetic_ratio = 0.2
+    synthetic_ratio = 0.1
     batch_size = 16
 
     # ========= Model =========

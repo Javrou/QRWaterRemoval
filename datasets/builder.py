@@ -1,7 +1,7 @@
 from torch.utils.data import DataLoader
 
-from datasets.synthetic_dataset import SyntheticQRDataset
 from datasets.paired_dataset import PairedQRDataset
+from datasets.synthetic_dataset import SyntheticQRDataset
 
 
 def _loader(dataset, cfg, shuffle):
@@ -26,12 +26,14 @@ def build_pretrain_loader(cfg):
 
     val = PairedQRDataset(
         cfg.val_root,
-        cfg.gray
+        cfg.gray,
+        max_files=cfg.val_samples
     )
 
     test = PairedQRDataset(
         cfg.test_root,
-        cfg.gray
+        cfg.gray,
+        max_files=cfg.val_samples
     )
 
     return (
@@ -53,12 +55,14 @@ def build_mixed_loader(cfg):
 
     val = PairedQRDataset(
         cfg.val_root,
-        cfg.gray
+        cfg.gray,
+        max_files=cfg.val_samples
     )
 
     test = PairedQRDataset(
         cfg.test_root,
-        cfg.gray
+        cfg.gray,
+        max_files=cfg.val_samples
     )
 
     return (

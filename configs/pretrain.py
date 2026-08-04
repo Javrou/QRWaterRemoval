@@ -6,15 +6,15 @@ class PretrainConfig(BaseExperimentConfig):
     train_root = "data/synthetic_dataset/train"
     val_root = "data/synthetic_dataset/val"
     test_root = "data/synthetic_dataset/test"
-    batch_size = 32
+    batch_size = 20
 
     # ========= Model =========
     use_ema = False
     ema_decay = 0.999
 
     # ========= Optimizer =========
-    epochs = 50
-    lr = 1e-4
+    epochs = 100
+    lr = 2e-4
     scheduler = "warmup_cosine"
 
     # ========= Log =========
@@ -23,7 +23,7 @@ class PretrainConfig(BaseExperimentConfig):
 
     # ========= Checkpoint =========
     ckpt_dir = "checkpoints/pretrain"
-    resume = False
+    resume = True
     resume_path = "checkpoints/pretrain/latest.pth"
     best_zxing_path = "checkpoints/pretrain/best_zxing.pth"
 
